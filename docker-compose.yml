@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:16
+    container_name: video_game_db
+    environment:
+      POSTGRES_USER: luca
+      POSTGRES_PASSWORD: luca_pw
+      POSTGRES_DB: video_game
+    ports:
+      - "5432:5432" # host:container
+    volumes:
+      - video_game_pgdata:/var/lib/postgresql/data
+
+volumes:
+  video_game_pgdata:

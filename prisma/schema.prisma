@@ -1,0 +1,524 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TagKind {
+  GENRE
+  SERIES
+  ENGINE
+  MODE
+  THEME
+  KEYWORD
+  PLAYER_PERSPECTIVE
+  FRANCHISE
+}
+
+enum CompanyRole {
+  DEVELOPER
+  PUBLISHER
+  PORTING
+  SUPPORTING
+}
+
+enum GameCategory {
+  MAIN_GAME
+  DLC_ADDON
+  EXPANSION
+  BUNDLE
+  STANDALONE_EXPANSION
+  MOD
+  EPISODE
+  SEASON
+  REMAKE
+  REMASTER
+  EXPANDED_GAME
+  PORT
+  FORK
+  PACK
+  UPDATE
+}
+
+enum GameStatus {
+  RELEASED
+  ALPHA
+  BETA
+  EARLY_ACCESS
+  OFFLINE
+  CANCELLED
+  RUMORED
+  DELISTED
+}
+
+enum ReleaseDateCategory {
+  YYYYMMMMDD
+  YYYYMMMM
+  YYYY
+  YYYYQ1
+  YYYYQ2
+  YYYYQ3
+  YYYYQ4
+  TBD
+}
+
+enum WebsiteCategory {
+  OFFICIAL
+  WIKIPEDIA
+  STEAM
+  GOG
+  EPIC_GAMES
+  ITCH
+  APPLE
+  ANDROID
+  TWITCH
+  YOUTUBE
+  DISCORD
+  REDDIT
+  FACEBOOK
+  INSTAGRAM
+  TWITTER
+  OTHER
+}
+
+enum ExternalGameCategory {
+  STEAM
+  GOG
+  EPIC_GAME_STORE
+  ITCH_IO
+  MICROSOFT_STORE
+  PLAYSTATION_STORE
+  NINTENDO_ESTORE
+  APPLE
+  ANDROID
+  TWITCH
+  YOUTUBE
+  DISCORD
+  METACRITIC
+  OTHER
+}
+
+enum GameImageKind {
+  COVER
+  ARTWORK
+  SCREENSHOT
+  OTHER
+}
+
+enum VideoProvider {
+  YOUTUBE
+  VIMEO
+  OTHER
+}
+
+enum AgeRatingOrganization {
+  ESRB
+  PEGI
+  CERO
+  USK
+  GRAC
+  CLASS_IND
+  ACB
+  OTHER
+}
+
+enum ScoreProvider {
+  INTERNAL
+  METACRITIC
+  OPENCRITIC
+  WIKIDATA
+  OTHER
+}
+
+enum PlatformType {
+  HOME_CONSOLE
+  HANDHELD
+  HYBRID
+  ARCADE
+  COMPUTER
+  MOBILE
+  CLOUD
+  SERVICE
+  OTHER
+}
+
+model Platform {
+  qid                  String    @id
+  name                 String
+  abbreviation         String?
+  alternativeName      String?
+  description          String?
+  summary              String?
+  slug                 String?
+  url                  String?
+  generation           Int?
+  type                 PlatformType?
+  claimsJson           Json?
+  firstReleaseAt       DateTime?
+  releaseYear          Int?
+  lastEnrichedAt       DateTime?
+  sitelinks            Int       @default(0)
+  isMajor              Boolean   @default(false)
+  wikiProjectGameCount Int?
+  sampleGameQid        String?
+  gamesCursorQid       String?
+  gamesCursorIri       String?
+  gamesCursorUpdatedAt DateTime?
+  gamesIngestedAt      DateTime?
+  gamesRosterFetchedCount Int    @default(0)
+  gamesRosterDone         Boolean @default(false)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  games        GamePlatform[]
+  releaseDates ReleaseDate[]
+
+  @@index([isMajor])
+  @@index([type])
+  @@index([sitelinks])
+  @@index([releaseYear])
+  @@index([wikiProjectGameCount])
+}
+
+model Game {
+  qid            String        @id
+  title          String
+  description    String?
+  storyline      String?
+  imageCommons   String?
+  imageUrl       String?
+  releaseYear    Int?
+  firstReleaseAt DateTime?
+  category       GameCategory?
+  status         GameStatus?
+  claimsJson     Json?
+  isJunk         Boolean       @default(false)
+  junkReason     String?
+  sitelinks      Int           @default(0)
+  wikiTitleEn    String?
+  wikiUrlEn      String?
+  aggregatedRating      Float?
+  aggregatedRatingCount Int?
+  rating                Float?
+  ratingCount           Int?
+  totalRating           Float?
+  totalRatingCount      Int?
+  lastEnrichedAt DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  platforms        GamePlatform[]
+  tags             GameTag[]
+  companies        GameCompany[]
+  releaseDates     ReleaseDate[]
+  websites         Website[]
+  externalGames    ExternalGame[]
+  alternativeNames AlternativeName[]
+  images           GameImage[]
+  videos           GameVideo[]
+  ageRatings       GameAgeRating[]
+  scores           GameScore[]
+  logs             GameLog[]
+  reviews          Review[]
+  listItems        ListItem[]
+
+  @@index([releaseYear])
+  @@index([firstReleaseAt])
+  @@index([isJunk])
+  @@index([isJunk, releaseYear])
+  @@index([updatedAt])
+}
+
+model ReleaseDate {
+  id          String               @id @default(cuid())
+  gameQid     String
+  platformQid String?
+  regionQid   String?
+  category    ReleaseDateCategory?
+  date        DateTime?
+  year        Int?
+  month       Int?
+  day         Int?
+  precision   Int?
+  human       String?
+  source      String?
+  claimId     String?
+  claimJson   Json?
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  game     Game      @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+  platform Platform? @relation(fields: [platformQid], references: [qid], onDelete: SetNull)
+
+  @@unique([gameQid, claimId])
+  @@index([gameQid, date])
+  @@index([gameQid, year])
+  @@index([platformQid])
+}
+
+model Website {
+  id        String          @id @default(cuid())
+  gameQid   String
+  category  WebsiteCategory @default(OTHER)
+  url       String
+  isTrusted Boolean         @default(false)
+  source    String?
+  claimId   String?
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, url])
+  @@index([gameQid, category])
+}
+
+model ExternalGame {
+  id        String               @id @default(cuid())
+  gameQid   String
+  category  ExternalGameCategory @default(OTHER)
+  uid       String?
+  name      String?
+  url       String?
+  source    String?
+  claimId   String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, category, uid])
+  @@index([category, uid])
+  @@index([gameQid])
+}
+
+model AlternativeName {
+  id        String   @id @default(cuid())
+  gameQid   String
+  name      String
+  comment   String?
+  source    String?
+  claimId   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, name])
+  @@index([gameQid])
+}
+
+model GameImage {
+  id         String        @id @default(cuid())
+  gameQid    String
+  kind       GameImageKind
+  url        String
+  source     String?
+  imageId    String?
+  width      Int?
+  height     Int?
+  isAnimated Boolean       @default(false)
+  hasAlpha   Boolean       @default(false)
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, kind, url])
+  @@index([gameQid, kind])
+}
+
+model GameVideo {
+  id        String        @id @default(cuid())
+  gameQid   String
+  provider  VideoProvider @default(YOUTUBE)
+  videoId   String
+  name      String?
+  source    String?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, provider, videoId])
+  @@index([provider, videoId])
+  @@index([gameQid])
+}
+
+model GameAgeRating {
+  id           String                @id @default(cuid())
+  gameQid      String
+  organization AgeRatingOrganization @default(OTHER)
+  rating       String
+  synopsis     String?
+  source       String?
+  claimId      String?
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, organization, rating])
+  @@index([gameQid, organization])
+}
+
+model GameScore {
+  id        String        @id @default(cuid())
+  gameQid   String
+  provider  ScoreProvider @default(OTHER)
+  score     Float
+  count     Int?
+  url       String?
+  source    String?
+  claimId   String?
+  asOf      DateTime?
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([gameQid, provider])
+  @@index([provider, score])
+  @@index([gameQid])
+}
+
+model GamePlatform {
+  gameQid     String
+  platformQid String
+  source      String?
+  createdAt   DateTime @default(now())
+
+  game     Game     @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+  platform Platform @relation(fields: [platformQid], references: [qid], onDelete: Cascade)
+
+  @@id([gameQid, platformQid])
+  @@index([platformQid])
+}
+
+model Tag {
+  id          String   @id
+  kind        TagKind
+  label       String
+  description String?
+  source      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  games GameTag[]
+
+  @@index([kind, label])
+}
+
+model GameTag {
+  gameQid   String
+  tagId     String
+  createdAt DateTime @default(now())
+
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([gameQid, tagId])
+  @@index([tagId])
+}
+
+model Company {
+  qid         String   @id
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  games GameCompany[]
+
+  @@index([name])
+}
+
+model GameCompany {
+  gameQid    String
+  companyQid String
+  role       CompanyRole
+  createdAt  DateTime    @default(now())
+
+  game    Game    @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+  company Company @relation(fields: [companyQid], references: [qid], onDelete: Cascade)
+
+  @@id([gameQid, companyQid, role])
+  @@index([companyQid])
+}
+
+model User {
+  id          String   @id @default(cuid())
+  handle      String   @unique
+  displayName String?
+  bio         String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  logs    GameLog[]
+  reviews Review[]
+  lists   List[]
+}
+
+model GameLog {
+  id        String    @id @default(cuid())
+  userId    String
+  gameQid   String
+  playedOn  DateTime?
+  notes     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@index([gameQid, createdAt])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  gameQid   String
+  rating    Int?
+  body      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([userId, gameQid])
+  @@index([gameQid, createdAt])
+  @@index([userId, createdAt])
+}
+
+model List {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  isPublic    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items ListItem[]
+
+  @@index([userId, updatedAt])
+}
+
+model ListItem {
+  listId    String
+  gameQid   String
+  note      String?
+  position  Int      @default(0)
+  createdAt DateTime @default(now())
+
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameQid], references: [qid], onDelete: Cascade)
+
+  @@id([listId, gameQid])
+  @@index([listId, position])
+}

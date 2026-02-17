@@ -1,0 +1,52 @@
+{
+  "name": "video-game-db-app",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "postinstall": "prisma generate",
+    "prisma:generate": "prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "wd:platforms": "tsx scripts/wikidata/commands/seedPlatforms.ts",
+    "wd:platforms:backfill": "tsx scripts/wikidata/commands/backfillPlatforms.ts",
+    "wd:platforms:enrich": "tsx scripts/wikidata/commands/enrichPlatforms.ts",
+    "wd:platforms:enrich:all": "tsx scripts/wikidata/commands/enrichPlatforms.ts --all",
+    "wd:platforms:major": "tsx scripts/wikidata/commands/setMajorPlatforms.ts",
+    "wd:platforms:groupings": "tsx scripts/wikidata/commands/importPlatformGroupings.ts",
+    "wd:games:reset": "tsx scripts/wikidata/commands/fetchGamesByPlatform.ts --reset-cursor",
+    "wd:games": "tsx scripts/wikidata/commands/fetchGamesByPlatform.ts",
+    "wd:enrich": "tsx scripts/wikidata/commands/enrichGames.ts",
+    "wd:enrich:all": "tsx scripts/wikidata/commands/enrichGames.ts --all",
+    "wd:scores": "tsx scripts/wikidata/commands/backfillGameScores.ts",
+    "wd:cleanup": "tsx scripts/wikidata/commands/flagJunkGames.ts",
+    "wd:coverage": "tsx scripts/wikidata/commands/reportPlatformCoverage.ts",
+    "wd:etl": "npm run wd:platforms && npm run wd:platforms:backfill && npm run wd:platforms:enrich && npm run wd:platforms:major && npm run wd:games && npm run wd:enrich && npm run wd:scores && npm run wd:cleanup"
+  },
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.4.0",
+    "@prisma/client": "^7.4.0",
+    "dotenv": "^17.3.1",
+    "next": "16.1.6",
+    "p-limit": "^7.3.0",
+    "pg": "^8.18.0",
+    "prisma": "^7.4.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^10.0.0",
+    "eslint-config-next": "^0.2.4",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
