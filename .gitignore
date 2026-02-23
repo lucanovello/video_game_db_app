@@ -24,6 +24,7 @@
 .DS_Store
 *.pem
 platform-coverage.csv
+property-usage.csv
 
 # debug
 npm-debug.log*
