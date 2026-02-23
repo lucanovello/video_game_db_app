@@ -188,6 +188,39 @@ model ExtractedQid {
   @@index([qid])
 }
 
+model PlatformRegistry {
+  platformQid String   @id
+  nameLabel   String
+  status      String   @default("ACTIVE")
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rosterSources PlatformRosterSource[]
+
+  @@index([status])
+  @@index([nameLabel])
+}
+
+model PlatformRosterSource {
+  id          String   @id @default(cuid())
+  platformQid String
+  sourceType  String
+  pageTitle   String
+  pageUrl     String?
+  notes       String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  platform PlatformRegistry @relation(fields: [platformQid], references: [platformQid], onDelete: Cascade)
+
+  @@unique([platformQid, sourceType, pageTitle])
+  @@index([platformQid])
+  @@index([sourceType])
+  @@index([isActive])
+}
+
 model Platform {
   qid                  String    @id
   name                 String
