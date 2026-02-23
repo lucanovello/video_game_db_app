@@ -24,6 +24,7 @@
     "wd:hydrate-prop-meta": "tsx scripts/wikidata/hydratePropertyMetadata.ts",
     "wd:hydrate-prop-meta:all": "tsx scripts/wikidata/hydratePropertyMetadata.ts --all",
     "wd:hydrate-games": "tsx scripts/wikidata/hydrateGamesFromClaims.ts",
+    "wd:hydrate-games:membership": "tsx scripts/wikidata/hydrateGamesFromMembership.ts",
     "wd:cache:smoke": "tsx scripts/wikidata/smokeCacheWrites.ts",
     "wiki:cache:smoke": "tsx scripts/wiki/smokeWikiClient.ts",
     "wiki:project:fetch": "tsx scripts/wiki/fetchWikiProjectVideoGamesLists.ts",
