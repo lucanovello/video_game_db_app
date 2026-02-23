@@ -144,6 +144,50 @@ enum PlatformType {
   OTHER
 }
 
+model WikiPageCache {
+  id          String   @id @default(cuid())
+  site        String
+  title       String
+  revid       BigInt?
+  fetchedAt   DateTime @default(now())
+  contentType String?
+  payloadJson Json?
+  payloadText String?
+  headersJson Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  extractedQids ExtractedQid[]
+
+  @@unique([site, title])
+  @@index([site])
+  @@index([revid])
+}
+
+model WikidataEntityCache {
+  qid        String   @id
+  lastrevid  BigInt?
+  entityJson Json
+  fetchedAt  DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([lastrevid])
+}
+
+model ExtractedQid {
+  id          String   @id @default(cuid())
+  pageCacheId String
+  qid         String
+  extractor   String?
+  createdAt   DateTime @default(now())
+
+  pageCache WikiPageCache @relation(fields: [pageCacheId], references: [id], onDelete: Cascade)
+
+  @@unique([pageCacheId, qid])
+  @@index([qid])
+}
+
 model Platform {
   qid                  String    @id
   name                 String
@@ -180,6 +224,30 @@ model Platform {
   @@index([sitelinks])
   @@index([releaseYear])
   @@index([wikiProjectGameCount])
+}
+
+model WikidataProperty {
+  propertyId    String   @id
+  labelEn       String?
+  descriptionEn String?
+  datatype      String?
+  updatedAt     DateTime @updatedAt
+
+  usages PropertyUsage[]
+}
+
+model PropertyUsage {
+  propertyId       String   @id
+  gamesWithProperty Int
+  coveragePct      Float
+  totalStatements  Int?
+  sampleGameIds    String[]
+  computedAt       DateTime @default(now())
+
+  property WikidataProperty? @relation(fields: [propertyId], references: [propertyId])
+
+  @@index([coveragePct])
+  @@index([gamesWithProperty])
 }
 
 model Game {

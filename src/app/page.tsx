@@ -23,6 +23,15 @@ export default function HomePage() {
           <span className='chip'>/games</span>
         </Link>
 
+        <Link className='panel stack' href='/platforms'>
+          <h2 className='game-title'>Browse Platforms</h2>
+          <p className='muted'>
+            Search platforms and open a detail page with metadata plus all
+            linked games.
+          </p>
+          <span className='chip'>/platforms</span>
+        </Link>
+
         <Link className='panel stack' href='/u/demo_user'>
           <h2 className='game-title'>Open a Profile</h2>
           <p className='muted'>

@@ -25,6 +25,15 @@ function buildGamesHref(params: {
   return `/games?${urlParams.toString()}`;
 }
 
+function toPlatformHref(platform: {
+  slug: string | null;
+  qid: string;
+}): string {
+  const qidSuffix = platform.qid.toLowerCase();
+  if (!platform.slug) return `/platforms/${qidSuffix}`;
+  return `/platforms/${platform.slug}-${qidSuffix}`;
+}
+
 export default async function GamesPage({ searchParams }: GamesPageProps) {
   const params = await searchParams;
 
@@ -48,57 +57,92 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
   if (year !== null) and.push({ releaseYear: year });
   if (and.length) where.AND = and;
 
-  const [games, total, platformOptions] = await prisma.$transaction([
-    prisma.game.findMany({
-      where,
-      orderBy: [{ releaseYear: "desc" }, { title: "asc" }],
-      skip,
-      take: PAGE_SIZE,
-      select: {
-        qid: true,
-        title: true,
-        description: true,
-        releaseYear: true,
-        imageUrl: true,
-        platforms: {
-          take: 3,
-          select: {
-            platform: {
-              select: { qid: true, name: true },
+  let games: Array<{
+    qid: string;
+    title: string;
+    description: string | null;
+    releaseYear: number | null;
+    imageUrl: string | null;
+    platforms: Array<{
+      platform: {
+        qid: string;
+        slug: string | null;
+        name: string;
+      };
+    }>;
+  }> = [];
+  let total = 0;
+  let platformOptions: Array<{ qid: string; name: string }> = [];
+  let dbUnavailable = false;
+
+  try {
+    const [gameRows, totalRows, platformRows] = await prisma.$transaction([
+      prisma.game.findMany({
+        where,
+        orderBy: [{ releaseYear: "desc" }, { title: "asc" }],
+        skip,
+        take: PAGE_SIZE,
+        select: {
+          qid: true,
+          title: true,
+          description: true,
+          releaseYear: true,
+          imageUrl: true,
+          platforms: {
+            take: 3,
+            select: {
+              platform: {
+                select: { qid: true, slug: true, name: true },
+              },
             },
           },
         },
-      },
-    }),
-    prisma.game.count({ where }),
-    prisma.platform.findMany({
-      where: { isMajor: true },
-      orderBy: [{ sitelinks: "desc" }, { name: "asc" }],
-      select: { qid: true, name: true },
-    }),
-  ]);
+      }),
+      prisma.game.count({ where }),
+      prisma.platform.findMany({
+        where: { isMajor: true },
+        orderBy: [{ sitelinks: "desc" }, { name: "asc" }],
+        select: { qid: true, name: true },
+      }),
+    ]);
+
+    games = gameRows;
+    total = totalRows;
+    platformOptions = platformRows;
+  } catch (error: unknown) {
+    dbUnavailable = true;
+    console.error("games-page: failed to query games", error);
+  }
 
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const prevPage = Math.max(1, page - 1);
   const nextPage = Math.min(totalPages, page + 1);
 
   return (
-    <section className="stack">
-      <header className="stack">
-        <h1 className="page-title">Games</h1>
-        <p className="muted">Console-first catalog from Wikidata. Filter by platform and year.</p>
+    <section className='stack'>
+      <header className='stack'>
+        <h1 className='page-title'>Games</h1>
+        <p className='muted'>
+          Console-first catalog from Wikidata. Filter by platform and year.
+        </p>
       </header>
 
-      <form className="panel search-grid" action="/games" method="get">
-        <label className="field">
+      <form className='panel search-grid' action='/games' method='get'>
+        <label className='field'>
           Search
-          <input className="input" type="text" name="q" defaultValue={q} placeholder="Halo, Zelda..." />
+          <input
+            className='input'
+            type='text'
+            name='q'
+            defaultValue={q}
+            placeholder='Halo, Zelda...'
+          />
         </label>
 
-        <label className="field">
+        <label className='field'>
           Platform
-          <select className="select" name="platform" defaultValue={platform}>
-            <option value="">All major platforms</option>
+          <select className='select' name='platform' defaultValue={platform}>
+            <option value=''>All major platforms</option>
             {platformOptions.map((option) => (
               <option key={option.qid} value={option.qid}>
                 {option.name}
@@ -107,68 +151,131 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
           </select>
         </label>
 
-        <label className="field">
+        <label className='field'>
           Release year
-          <input className="input" type="number" name="year" defaultValue={yearRaw} min={1950} max={2100} />
+          <input
+            className='input'
+            type='number'
+            name='year'
+            defaultValue={yearRaw}
+            min={1950}
+            max={2100}
+          />
         </label>
 
-        <label className="field">
+        <label className='field'>
           Include junk
-          <input type="checkbox" name="includeJunk" value="1" defaultChecked={includeJunk} />
+          <input
+            type='checkbox'
+            name='includeJunk'
+            value='1'
+            defaultChecked={includeJunk}
+          />
         </label>
 
-        <div className="field">
+        <div className='field'>
           <span>Run query</span>
-          <button className="button" type="submit">
+          <button className='button' type='submit'>
             Search
           </button>
         </div>
       </form>
 
-      <div className="inline-actions muted">
+      <div className='inline-actions muted'>
         <span>
           Showing {games.length} of {total} games
         </span>
       </div>
 
-      <div className="games-grid">
+      {dbUnavailable ? (
+        <section className='panel stack empty-state'>
+          <h2 className='game-title'>Database unavailable</h2>
+          <p className='muted'>
+            Could not load games because the database connection failed. Start
+            Postgres (or verify `DATABASE_URL`) and refresh.
+          </p>
+        </section>
+      ) : null}
+
+      <div className='games-grid'>
         {games.map((game) => (
-          <Link key={game.qid} className="game-card" href={`/games/${game.qid}`}>
-            <h2 className="game-title">{game.title}</h2>
-            <p className="meta">
+          <article key={game.qid} className='game-card'>
+            <h2 className='game-title'>
+              <Link
+                className='text-link strong-link'
+                href={`/games/${game.qid}`}
+              >
+                {game.title}
+              </Link>
+            </h2>
+            <p className='meta'>
               {game.qid}
               {game.releaseYear ? ` - ${game.releaseYear}` : ""}
             </p>
-            {game.description ? <p className="meta">{game.description}</p> : null}
-            <div className="chip-row">
+            {game.description ? (
+              <p className='meta'>{game.description}</p>
+            ) : null}
+            <div className='chip-row'>
               {game.platforms.map((entry) => (
-                <span key={entry.platform.qid} className="chip">
+                <Link
+                  key={entry.platform.qid}
+                  className='chip chip-link'
+                  href={toPlatformHref(entry.platform)}
+                >
                   {entry.platform.name}
-                </span>
+                </Link>
               ))}
             </div>
-          </Link>
+          </article>
         ))}
       </div>
 
-      <div className="inline-actions">
-        <Link
-          className="button secondary"
-          href={buildGamesHref({ q, platform, year: yearRaw, includeJunk, page: prevPage })}
-          aria-disabled={page <= 1}
-        >
-          Previous
-        </Link>
-        <span className="muted">
+      {!dbUnavailable && games.length === 0 ? (
+        <section className='panel stack empty-state'>
+          <h2 className='game-title'>No games found</h2>
+          <p className='muted'>
+            Try broadening your search, changing the year filter, or enabling
+            junk entries.
+          </p>
+        </section>
+      ) : null}
+
+      <div className='inline-actions'>
+        {page <= 1 ? (
+          <span className='button secondary is-disabled'>Previous</span>
+        ) : (
+          <Link
+            className='button secondary'
+            href={buildGamesHref({
+              q,
+              platform,
+              year: yearRaw,
+              includeJunk,
+              page: prevPage,
+            })}
+          >
+            Previous
+          </Link>
+        )}
+        <span className='muted'>
           Page {page} / {totalPages}
         </span>
-        <Link
-          className="button secondary"
-          href={buildGamesHref({ q, platform, year: yearRaw, includeJunk, page: nextPage })}
-          aria-disabled={page >= totalPages}
-        >
-          Next
-        </Link>
+        {page >= totalPages ? (
+          <span className='button secondary is-disabled'>Next</span>
+        ) : (
+          <Link
+            className='button secondary'
+            href={buildGamesHref({
+              q,
+              platform,
+              year: yearRaw,
+              includeJunk,
+              page: nextPage,
+            })}
+          >
+            Next
+          </Link>
+        )}
       </div>
     </section>
   );

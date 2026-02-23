@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CompanyRole, TagKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
@@ -10,6 +11,15 @@ function sortByLabel<T extends { label: string }>(items: T[]): T[] {
   return [...items].sort((a, b) => a.label.localeCompare(b.label));
 }
 
+function toPlatformHref(platform: {
+  slug: string | null;
+  qid: string;
+}): string {
+  const qidSuffix = platform.qid.toLowerCase();
+  if (!platform.slug) return `/platforms/${qidSuffix}`;
+  return `/platforms/${platform.slug}-${qidSuffix}`;
+}
+
 export default async function GameDetailPage({ params }: GameDetailPageProps) {
   const { qid } = await params;
 
@@ -19,7 +29,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
       platforms: {
         select: {
           platform: {
-            select: { qid: true, name: true },
+            select: { qid: true, slug: true, name: true },
           },
         },
       },
@@ -51,16 +61,24 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
 
   const tagGroups = {
     genres: sortByLabel(
-      game.tags.filter((entry) => entry.tag.kind === TagKind.GENRE).map((entry) => entry.tag),
+      game.tags
+        .filter((entry) => entry.tag.kind === TagKind.GENRE)
+        .map((entry) => entry.tag),
     ),
     series: sortByLabel(
-      game.tags.filter((entry) => entry.tag.kind === TagKind.SERIES).map((entry) => entry.tag),
+      game.tags
+        .filter((entry) => entry.tag.kind === TagKind.SERIES)
+        .map((entry) => entry.tag),
     ),
     engines: sortByLabel(
-      game.tags.filter((entry) => entry.tag.kind === TagKind.ENGINE).map((entry) => entry.tag),
+      game.tags
+        .filter((entry) => entry.tag.kind === TagKind.ENGINE)
+        .map((entry) => entry.tag),
     ),
     modes: sortByLabel(
-      game.tags.filter((entry) => entry.tag.kind === TagKind.MODE).map((entry) => entry.tag),
+      game.tags
+        .filter((entry) => entry.tag.kind === TagKind.MODE)
+        .map((entry) => entry.tag),
     ),
   };
 
@@ -72,118 +90,164 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
     .map((entry) => entry.company);
 
   return (
-    <section className="stack">
-      <header className="stack">
-        <h1 className="page-title">{game.title}</h1>
-        <p className="muted">
+    <section className='stack'>
+      <header className='stack'>
+        <h1 className='page-title'>{game.title}</h1>
+        <p className='muted'>
           {game.qid}
           {game.releaseYear ? ` • ${game.releaseYear}` : ""}
         </p>
-        {game.description ? <p className="muted">{game.description}</p> : null}
-        <div className="chip-row">
+        {game.description ? <p className='muted'>{game.description}</p> : null}
+        <div className='chip-row'>
           {game.platforms.map((entry) => (
-            <span key={entry.platform.qid} className="chip">
+            <Link
+              key={entry.platform.qid}
+              className='chip chip-link'
+              href={toPlatformHref(entry.platform)}
+            >
               {entry.platform.name}
-            </span>
+            </Link>
           ))}
         </div>
       </header>
 
-      <div className="two-col">
-        <div className="stack">
-          <section className="panel stack">
-            <h2 className="game-title">Details</h2>
-            <div className="chip-row">
+      <div className='two-col'>
+        <div className='stack'>
+          <section className='panel stack'>
+            <h2 className='game-title'>Details</h2>
+            <div className='chip-row'>
               {tagGroups.genres.map((tag) => (
-                <span key={tag.id} className="chip">
+                <span key={tag.id} className='chip'>
                   Genre: {tag.label}
                 </span>
               ))}
               {tagGroups.series.map((tag) => (
-                <span key={tag.id} className="chip">
+                <span key={tag.id} className='chip'>
                   Series: {tag.label}
                 </span>
               ))}
               {tagGroups.engines.map((tag) => (
-                <span key={tag.id} className="chip">
+                <span key={tag.id} className='chip'>
                   Engine: {tag.label}
                 </span>
               ))}
               {tagGroups.modes.map((tag) => (
-                <span key={tag.id} className="chip">
+                <span key={tag.id} className='chip'>
                   Mode: {tag.label}
                 </span>
               ))}
             </div>
-            <p className="meta">
-              Developers: {developers.length ? developers.map((item) => item.name).join(", ") : "n/a"}
+            <p className='meta'>
+              Developers:{" "}
+              {developers.length
+                ? developers.map((item) => item.name).join(", ")
+                : "n/a"}
             </p>
-            <p className="meta">
-              Publishers: {publishers.length ? publishers.map((item) => item.name).join(", ") : "n/a"}
+            <p className='meta'>
+              Publishers:{" "}
+              {publishers.length
+                ? publishers.map((item) => item.name).join(", ")
+                : "n/a"}
             </p>
           </section>
 
-          <section className="panel stack">
-            <h2 className="game-title">Reviews</h2>
+          <section className='panel stack'>
+            <h2 className='game-title'>Reviews</h2>
             {game.reviews.length ? (
-              <ul className="list-reset">
+              <ul className='list-reset'>
                 {game.reviews.map((review) => (
-                  <li key={review.id} className="review-item stack">
-                    <p className="meta">
+                  <li key={review.id} className='review-item stack'>
+                    <p className='meta'>
                       @{review.user.handle}
                       {review.rating !== null ? ` • ${review.rating}/10` : ""}
                     </p>
-                    {review.body ? <p>{review.body}</p> : <p className="meta">No text review.</p>}
+                    {review.body ? (
+                      <p>{review.body}</p>
+                    ) : (
+                      <p className='meta'>No text review.</p>
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted">No reviews yet.</p>
+              <p className='muted'>No reviews yet.</p>
             )}
           </section>
         </div>
 
-        <aside className="stack">
-          <form className="panel stack" action="/api/logs" method="post">
-            <h2 className="game-title">Log Play</h2>
-            <input type="hidden" name="gameQid" value={game.qid} />
-            <input type="hidden" name="redirectTo" value={`/games/${game.qid}`} />
+        <aside className='stack'>
+          <form className='panel stack' action='/api/logs' method='post'>
+            <h2 className='game-title'>Log Play</h2>
+            <input type='hidden' name='gameQid' value={game.qid} />
+            <input
+              type='hidden'
+              name='redirectTo'
+              value={`/games/${game.qid}`}
+            />
 
-            <label className="field">
+            <label className='field'>
               Handle
-              <input className="input" name="handle" defaultValue="demo_user" required />
+              <input
+                className='input'
+                name='handle'
+                defaultValue='demo_user'
+                required
+              />
             </label>
-            <label className="field">
+            <label className='field'>
               Played on
-              <input className="input" type="date" name="playedOn" />
+              <input className='input' type='date' name='playedOn' />
             </label>
-            <label className="field">
+            <label className='field'>
               Notes
-              <textarea className="textarea" name="notes" placeholder="Session notes..." />
+              <textarea
+                className='textarea'
+                name='notes'
+                placeholder='Session notes...'
+              />
             </label>
-            <button className="button" type="submit">
+            <button className='button' type='submit'>
               Save log
             </button>
           </form>
 
-          <form className="panel stack" action="/api/reviews" method="post">
-            <h2 className="game-title">Write / Update Review</h2>
-            <input type="hidden" name="gameQid" value={game.qid} />
-            <input type="hidden" name="redirectTo" value={`/games/${game.qid}`} />
+          <form className='panel stack' action='/api/reviews' method='post'>
+            <h2 className='game-title'>Write / Update Review</h2>
+            <input type='hidden' name='gameQid' value={game.qid} />
+            <input
+              type='hidden'
+              name='redirectTo'
+              value={`/games/${game.qid}`}
+            />
 
-            <label className="field">
+            <label className='field'>
               Handle
-              <input className="input" name="handle" defaultValue="demo_user" required />
+              <input
+                className='input'
+                name='handle'
+                defaultValue='demo_user'
+                required
+              />
             </label>
-            <label className="field">
+            <label className='field'>
               Rating (1-10)
-              <input className="input" type="number" name="rating" min={1} max={10} />
+              <input
+                className='input'
+                type='number'
+                name='rating'
+                min={1}
+                max={10}
+              />
             </label>
-            <label className="field">
+            <label className='field'>
               Review
-              <textarea className="textarea" name="body" placeholder="Why did this game work (or not)?" />
+              <textarea
+                className='textarea'
+                name='body'
+                placeholder='Why did this game work (or not)?'
+              />
             </label>
-            <button className="button secondary" type="submit">
+            <button className='button secondary' type='submit'>
               Save review
             </button>
           </form>

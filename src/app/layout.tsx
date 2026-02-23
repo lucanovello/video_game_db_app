@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { Fraunces, Space_Grotesk } from "next/font/google";
+import NavLink from "./nav-link";
 import "./globals.css";
 
 const bodyFont = Space_Grotesk({
@@ -32,8 +33,9 @@ export default function RootLayout({
               video-game-db-app
             </Link>
             <nav className='topnav'>
-              <Link href='/games'>Games</Link>
-              <Link href='/u/demo_user'>Profile</Link>
+              <NavLink href='/games'>Games</NavLink>
+              <NavLink href='/platforms'>Platforms</NavLink>
+              <NavLink href='/u/demo_user'>Profile</NavLink>
             </nav>
           </header>
           <main className='page-wrap'>{children}</main>

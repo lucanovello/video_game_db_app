@@ -45,6 +45,7 @@ export type WikidataClaims = Record<string, WikidataClaim[] | undefined>;
 export interface WikidataEntity {
   id: string;
   type?: string;
+  datatype?: string;
   labels?: Record<string, WikidataMonolingualText | undefined>;
   aliases?: Record<string, WikidataMonolingualText[] | undefined>;
   descriptions?: Record<string, WikidataMonolingualText | undefined>;

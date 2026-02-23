@@ -103,6 +103,38 @@ npm run wd:scores        # recompute internal score snapshots from reviews
 npm run wd:cleanup       # flag obvious junk (missing labels/entities) for hiding
 ```
 
+## Property Registry + Claim Hydration
+
+Catalog claims are stored in `Game.claimsJson`, and can be normalized into dedicated fields/tables with a controlled property registry.
+
+New tables:
+
+- `WikidataProperty` stores Wikidata property metadata (`labelEn`, `descriptionEn`, `datatype`)
+- `PropertyUsage` stores property coverage over local games (`gamesWithProperty`, `coveragePct`, `totalStatements`, samples)
+
+Scripts:
+
+```bash
+npm run wd:analyze-props      # analyze claimsJson usage; populates PropertyUsage
+npm run wd:hydrate-prop-meta  # hydrates WikidataProperty from top used properties
+npm run wd:hydrate-prop-meta:all # hydrates WikidataProperty for all PropertyUsage properties
+npm run wd:hydrate-games      # parses claimsJson via registry and writes normalized rows
+npm run wd:export-props-csv > property-usage.csv # export enriched property usage CSV to repo root
+```
+
+Workflow:
+
+1. Run `wd:analyze-props`
+2. Review/update `scripts/wikidata/propertyRegistry.ts`
+3. Run `wd:hydrate-prop-meta` and `wd:hydrate-games`
+
+Useful flags:
+
+- `wd:analyze-props --batch-size=2000 --sample-size=5 --mode=truncate`
+- `wd:hydrate-prop-meta --top-n=150 --batch-size=50 --concurrency=2`
+- `wd:hydrate-prop-meta --all --batch-size=50 --concurrency=2`
+- `wd:hydrate-games --batch-size=500 --max-games=10000 --no-niche`
+
 After schema changes that add new derived fields (e.g. Wikipedia sitelinks), run:
 
 ```bash

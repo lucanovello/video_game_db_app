@@ -1,163 +1,173 @@
-## Project: video-game-db-app (Video Game Hub)
+# Copilot Instructions — Video Game DB (Wikidata/Wikipedia ingestion)
 
-video-game-db-app is a Next.js (App Router) + TypeScript + Prisma + Postgres web app. It combines:
+## Project goal
 
-1. A **catalog** of video games sourced from **Wikidata** (WDQS + wbgetentities).
-2. A **social layer**: users log plays, rate/review games, and create lists.
+Build a “Letterboxd for video games” database + web app. The core technical objective is a **repeatable, idempotent ingestion pipeline** that:
 
-The catalog ingest is designed to be **rerunnable**, **resumable**, and **polite to WDQS** (throttled, retry/backoff, small queries).
+1. discovers rosters (games per platform),
+2. caches raw upstream responses,
+3. parses into a normalized Postgres schema,
+4. generates coverage/QA reports.
 
----
-
-## High-level goals
-
-### Catalog (Phase 1)
-
-- Ingest **console-first** game catalog using WDQS by platform (console platforms are cleaner than Windows/PC).
-- Store game QIDs with enough metadata to browse: title, description, image, release year, platforms.
-- Keep raw WD claims JSON for future expansion.
-
-### Social layer (Phase 1)
-
-- Minimal auth or stubbed user (can implement real auth later).
-- Users can:
-  - log a game (playedOn + notes)
-  - write a review (rating + body)
-  - make lists (add games in order)
-
-### Non-goals (for MVP)
-
-- Do NOT attempt “all video games ever” from WD dumps.
-- Do NOT ingest PC/Windows shovelware during console MVP.
-- Do NOT build a perfect moderation system or full recommendation engine.
+This repo uses **Next.js + TypeScript + Prisma + Postgres** and a set of Node scripts under `scripts/` for ingestion.
 
 ---
 
-## Data sources
+## Guiding principles (non-negotiable)
 
-- WDQS (SPARQL) for roster discovery:
-  - Console platforms: instance/subclass of `video game console (Q8076)`
-  - Games: instance of `video game (Q7889)` and platform `P400`
-- Wikidata API `wbgetentities` for hydration:
-  - labels/descriptions
-  - claims (release date, genre, etc.)
-  - sitelinks (Wikipedia presence signal)
-
-Respect WDQS etiquette:
-
-- Always send a descriptive User-Agent (env var).
-- Throttle concurrency.
-- Retry on 429/5xx with backoff and honor Retry-After.
+- **Idempotent scripts:** running the same script twice should not duplicate rows or corrupt data.
+- **Cache first:** never refetch upstream data if you already have the same version cached.
+- **Two-layer data model:**
+  - **Raw cache layer**: store fetched page/entity payloads (JSON/text) + version markers.
+  - **Parsed layer**: store normalized entities used by the app (Game, Platform, etc.).
+- **Provenance-aware:** every parsed record should be traceable back to a cache entry (page/entity) that produced it.
+- **Small, testable steps:** implement ingestion in discrete scripts with clear inputs/outputs.
+- **Fail gracefully:** partial progress is acceptable; scripts should resume/retry rather than restart from scratch.
 
 ---
 
-## Expected architecture
+## Repo conventions
 
-### App
+### TypeScript / Node
 
-- Next.js App Router
-- Server components for data fetch where possible
-- Route handlers for mutations (logs/reviews/lists)
-- Prisma for DB access
+- Prefer TypeScript for scripts (`scripts/**/*.ts`).
+- Avoid large framework dependencies in ingestion scripts; keep them lean.
+- Use a single, reusable HTTP client helper for upstream calls.
 
-### Scripts (ETL)
+### Prisma / Postgres
 
-All Wikidata scripts live under `scripts/wikidata/` and should be runnable via `tsx`.
+- Use Prisma migrations for schema changes.
+- Prefer `Json`/JSONB for raw payload storage in cache tables.
+- Add **unique constraints** and **indexes** to enforce idempotency and performance.
 
-Pipeline order:
+### Logging
 
-1. `seedPlatforms.ts` — load console platforms
-2. `setMajorPlatforms.ts` — mark “major consoles” (e.g., by sitelinks or curated list)
-3. `fetchGamesByPlatform.ts` — roster games per platform with cursor paging; upsert Game + join table
-4. `enrichGames.ts` — hydrate game details and related entities (genres/companies/etc.)
-
-Design principles for ETL scripts:
-
-- Idempotent: safe to re-run without creating duplicates
-- Resumable: persist cursor per platform
-- Batch DB writes where possible (avoid per-row upsert in huge loops)
-- Keep queries narrow (per platform) to avoid WDQS timeouts
+- Scripts must log:
+  - counts (fetched, cached hit, parsed, upserted)
+  - timings (start/end)
+  - any “skipped because unchanged” behavior
+- Errors should include enough context to debug (platform id, page title, QID).
 
 ---
 
-## Prisma expectations
+## Data ingestion architecture (how to think about it)
 
-- QIDs are primary keys for catalog entities (Game.qid, Platform.qid, Company.qid, Tag.id)
-- Social entities reference Game.qid
-- Prefer join tables (GamePlatform, GameTag, GameCompany) over arrays for queryability
+### 1) Raw cache layer (source documents)
 
----
+Cache upstream responses so we can re-parse without re-downloading and can debug issues later.
 
-## Code conventions
+**Cache rules**
 
-- TypeScript strict mode; avoid `any`.
-- Keep domain parsing isolated:
-  - `scripts/wikidata/claims/` can host claim-extractor helpers.
-- Use small, testable functions:
-  - `extractReleaseYear(claims)`
-  - `extractImageCommons(claims)`
-  - `extractGenres(claims)` etc.
-- Prefer “labels-only” calls for related entity label resolution where possible to reduce payload:
-  - Add `wbGetEntitiesLabels(ids)` vs `wbGetEntitiesFull(ids)`.
+- “Version marker” determines if a fetch is needed:
+  - Wiki pages: store revision id (a version number).
+  - Wikidata entities: store last revision id (a version number).
+- If version marker unchanged → **skip network** and use cached payload.
+
+### 2) Parsed layer (normalized domain tables)
+
+Parsers read from cache tables and write to app tables. Parsers must be deterministic and re-runnable.
 
 ---
 
-## WDQS / API throttling requirements
+## Upstream calls (keep it simple)
 
-- Centralize HTTP logic in `http.ts` with:
-  - retry/backoff with jitter
-  - respect Retry-After
-- Limit concurrency with `p-limit` for:
-  - WDQS requests
-  - wbgetentities batches
-- Avoid giant SPARQL joins; prefer multiple smaller calls.
+We interact with:
 
----
+- Wikipedia API endpoint (`en.wikipedia.org/...`) for list pages + game pages.
+- Wikidata API endpoint (`wikidata.org/...`) for curated project pages and entity hydration.
 
-## Routes / UI (MVP)
+**Implementation approach**
 
-### Pages
-
-- `/games` — browse/search games (filter by platform, year)
-- `/games/[qid]` — game detail + reviews + “log” action
-- `/u/[handle]` — profile: logs, reviews, lists
-
-### API route handlers (MVP)
-
-- `GET /api/games?q=&platform=&page=`
-- `GET /api/games/[qid]`
-- `POST /api/logs`
-- `POST /api/reviews`
-- `POST /api/lists` and `POST /api/lists/[id]/items`
+- Create a single module like `scripts/wiki/wikiClient.ts`:
+  - build request URLs with query params
+  - `fetch()` JSON/text
+  - retry with backoff on transient failures
+  - concurrency limiting (simple queue)
+- All scripts should reuse this client; do not duplicate request logic.
 
 ---
 
-## Development workflow checklist
+## Script design standards
 
-1. Ensure Postgres is running and `DATABASE_URL` works.
-2. Run `prisma migrate dev`.
-3. Run ETL scripts in order (console-first).
-4. Build basic browsing UI.
-5. Add social features.
-6. Only after MVP: add PC ingestion with strict quality gates.
+### Script contract
+
+Every script should clearly define:
+
+- **Inputs** (DB tables, env vars, optional CLI args)
+- **Outputs** (DB tables updated, files written, logs printed)
+- **Idempotency behavior** (unique keys, upserts, skip rules)
+
+### Script naming
+
+Use verbs:
+
+- `fetch*` = downloads + caches only
+- `parse*` = reads cached data, extracts items, writes parsed tables
+- `ingest*` = does multiple stages end-to-end
+- `report*` = outputs coverage/QA metrics
+
+### Recommended structure
+
+- `scripts/wiki/` — Wikipedia/Wikidata page fetch + parsing helpers
+- `scripts/wikidata/` — entity hydration + entity parsing
+- `scripts/reports/` — coverage reports and QA utilities
+- `scripts/lib/` — shared utilities (db, logging, concurrency, CLI args)
 
 ---
 
-## PC ingestion (later)
+## DB patterns Copilot should follow
 
-When adding Windows/PC:
+### Use database constraints to enforce correctness
 
-- Do NOT ingest everything with platform = Windows.
-- Require at least one strong external anchor OR Wikipedia sitelink.
-- Implement as separate script `fetchPcGames.ts` and mark those sources separately.
+- Prefer `@@unique([...])` constraints for membership tables.
+- Prefer `upsert` / `createMany({ skipDuplicates: true })` patterns.
+- Add indexes on:
+  - foreign keys
+  - frequently filtered columns (platformQid, gameQid, title)
+  - version markers (revid/lastrevid) if used in queries
+
+### Prefer “latest snapshot” caching unless explicitly asked for history
+
+Default is: one cache row per (site, title) or per QID, updated when version changes.
+Only store full revision history if a specific need is identified.
 
 ---
 
-## If unsure
+## Coverage / QA reporting (must-have)
 
-Default behavior:
+Provide scripts that output:
 
-- Keep console ingestion conservative but complete (store, then score/flag).
-- Don’t prematurely delete catalog entries; use `isJunk` + `junkReason` flags.
+- total games per platform
+- % with release date
+- % with genre
+- % with developer/publisher
+- sample lists of missing-field games to guide improvements
 
-End.
+Reports should be fast and not require network.
+
+---
+
+## Safety / hygiene
+
+- Never hardcode secrets. Read from `.env` / environment variables.
+- Avoid aggressive concurrency. Be polite to upstream services.
+- Don’t introduce heavy parsing dependencies unless clearly justified.
+
+---
+
+## How Copilot should work on tasks
+
+1. **Start by summarizing the plan** for the change (files to edit, new scripts/models).
+2. Make schema changes first (Prisma), then implement scripts, then add a minimal report/test.
+3. Keep PR-sized diffs: no massive refactors unless requested.
+4. If uncertain about an existing convention, search the codebase and match it.
+
+---
+
+## Definition of done for any ingestion feature
+
+- Schema + migration is added (if needed).
+- Script is idempotent and logs meaningful counts.
+- Cache skip logic is implemented (no refetch when unchanged).
+- A report or quick query verifies output quality.
+- Re-running scripts produces the same final DB state.

@@ -48,6 +48,12 @@ export async function wbGetEntitiesLabels(
   return wbGetEntities(ids, "labels|descriptions");
 }
 
+export async function wbGetPropertyEntities(
+  propertyIds: string[],
+): Promise<WbGetEntitiesResponse> {
+  return wbGetEntities(propertyIds, "labels|descriptions|datatype");
+}
+
 export function commonsFileUrl(filename: string) {
   // filename like "Some_Image.jpg"
   return `https://commons.wikimedia.org/wiki/Special:FilePath/${encodeURIComponent(filename)}`;
