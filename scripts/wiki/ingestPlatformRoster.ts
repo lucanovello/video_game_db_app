@@ -147,7 +147,10 @@ async function ingestSource(
   linkedTitles: number;
   resolvedQids: number;
 }> {
-  const page = await client.getOrFetchWikiPage(WIKIPEDIA_SITE, source.pageTitle);
+  const page = await client.getOrFetchWikiPage(
+    WIKIPEDIA_SITE,
+    source.pageTitle,
+  );
 
   const sourcePage = await prisma.wikiPageCache.findUnique({
     where: {
@@ -245,7 +248,11 @@ async function main() {
     );
   }
 
-  const client = new WikiClient({ concurrency: 3, maxRetries: 5, timeoutMs: 30000 });
+  const client = new WikiClient({
+    concurrency: 3,
+    maxRetries: 5,
+    timeoutMs: 30000,
+  });
 
   let totalInserted = 0;
   let totalLinkedTitles = 0;
