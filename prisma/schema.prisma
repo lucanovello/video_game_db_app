@@ -158,6 +158,7 @@ model WikiPageCache {
   updatedAt   DateTime @updatedAt
 
   extractedQids ExtractedQid[]
+  memberships  PlatformGameMembership[]
 
   @@unique([site, title])
   @@index([site])
@@ -197,6 +198,7 @@ model PlatformRegistry {
   updatedAt   DateTime @updatedAt
 
   rosterSources PlatformRosterSource[]
+  memberships   PlatformGameMembership[]
 
   @@index([status])
   @@index([nameLabel])
@@ -219,6 +221,25 @@ model PlatformRosterSource {
   @@index([platformQid])
   @@index([sourceType])
   @@index([isActive])
+}
+
+model PlatformGameMembership {
+  id           String   @id @default(cuid())
+  platformQid  String
+  gameQid      String
+  sourcePageId String
+  regionHint   String?
+  dateHint     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  platform   PlatformRegistry @relation(fields: [platformQid], references: [platformQid], onDelete: Cascade)
+  sourcePage WikiPageCache    @relation(fields: [sourcePageId], references: [id], onDelete: Cascade)
+
+  @@unique([platformQid, gameQid, sourcePageId])
+  @@index([platformQid])
+  @@index([gameQid])
+  @@index([sourcePageId])
 }
 
 model Platform {
