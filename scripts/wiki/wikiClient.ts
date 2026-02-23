@@ -118,6 +118,14 @@ export class WikiClient {
     return url.toString();
   }
 
+  apiBaseForSite(site: string): string {
+    return this.resolveWikiApiBase(site);
+  }
+
+  requestJson<T>(url: string): Promise<T> {
+    return this.fetchJson<T>(url);
+  }
+
   async getOrFetchWikiPage(
     site: string,
     title: string,

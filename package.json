@@ -26,6 +26,8 @@
     "wd:hydrate-games": "tsx scripts/wikidata/hydrateGamesFromClaims.ts",
     "wd:cache:smoke": "tsx scripts/wikidata/smokeCacheWrites.ts",
     "wiki:cache:smoke": "tsx scripts/wiki/smokeWikiClient.ts",
+    "wiki:project:fetch": "tsx scripts/wiki/fetchWikiProjectVideoGamesLists.ts",
+    "wiki:project:parse-qids": "tsx scripts/wiki/parseWikiProjectQids.ts",
     "wd:export-props-csv": "tsx scripts/wikidata/exportPropertyUsageCsv.ts",
     "wd:props": "npm run wd:analyze-props && npm run wd:hydrate-prop-meta",
     "wd:props:full": "npm run wd:analyze-props && npm run wd:hydrate-prop-meta:all",
