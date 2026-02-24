@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { CompanyRole, TagKind, type Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { toSingle } from "@/lib/validation";
+import { getPlatformImageUrlFromClaims } from "@/lib/wikidata-image";
 
 const PAGE_SIZE = 50;
 
@@ -197,6 +198,7 @@ export default async function PlatformDetailPage({
     sitelinks: number;
     wikiProjectGameCount: number | null;
     url: string | null;
+    claimsJson: Prisma.JsonValue | null;
   } | null = null;
 
   try {
@@ -217,6 +219,7 @@ export default async function PlatformDetailPage({
         sitelinks: true,
         wikiProjectGameCount: true,
         url: true,
+        claimsJson: true,
       },
     });
   } catch (error: unknown) {
@@ -309,6 +312,7 @@ export default async function PlatformDetailPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const prevPage = Math.max(1, page - 1);
   const nextPage = Math.min(totalPages, page + 1);
+  const platformImageUrl = getPlatformImageUrlFromClaims(platform.claimsJson);
   const routeSlug = platform.slug
     ? `${platform.slug}-${platform.qid.toLowerCase()}`
     : platform.qid.toLowerCase();
@@ -317,33 +321,61 @@ export default async function PlatformDetailPage({
     <section className='stack'>
       <header className='stack'>
         <h1 className='page-title'>{platform.name}</h1>
-        <p className='muted'>
-          {platform.qid}
-          {platform.releaseYear ? ` • ${platform.releaseYear}` : ""}
-          {platform.type ? ` • ${formatPlatformType(platform.type)}` : ""}
-        </p>
+        {platformImageUrl ? (
+          <img
+            className='entity-hero'
+            src={platformImageUrl}
+            alt={`${platform.name} image`}
+            loading='lazy'
+          />
+        ) : null}
         {platform.description ? (
           <p className='muted'>{platform.description}</p>
         ) : null}
-        <div className='chip-row'>
-          <span className='chip'>Sitelinks: {platform.sitelinks}</span>
-          {platform.wikiProjectGameCount !== null ? (
-            <span className='chip'>
-              WVG games: {platform.wikiProjectGameCount}
-            </span>
-          ) : null}
-          {platform.url ? (
-            <Link
-              className='chip chip-link'
-              href={platform.url}
-              target='_blank'
-              rel='noreferrer'
-            >
-              External link
-            </Link>
-          ) : null}
-        </div>
       </header>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Quick facts</h2>
+        <dl className='detail-grid'>
+          <div className='detail-row'>
+            <dt>QID</dt>
+            <dd>{platform.qid}</dd>
+          </div>
+          <div className='detail-row'>
+            <dt>Release year</dt>
+            <dd>{platform.releaseYear ?? "n/a"}</dd>
+          </div>
+          <div className='detail-row'>
+            <dt>Type</dt>
+            <dd>{formatPlatformType(platform.type) ?? "n/a"}</dd>
+          </div>
+          <div className='detail-row'>
+            <dt>Sitelinks</dt>
+            <dd>{platform.sitelinks}</dd>
+          </div>
+          <div className='detail-row'>
+            <dt>WVG games</dt>
+            <dd>{platform.wikiProjectGameCount ?? "n/a"}</dd>
+          </div>
+          <div className='detail-row'>
+            <dt>External</dt>
+            <dd>
+              {platform.url ? (
+                <Link
+                  className='text-link strong-link'
+                  href={platform.url}
+                  target='_blank'
+                  rel='noreferrer'
+                >
+                  Open reference page
+                </Link>
+              ) : (
+                "n/a"
+              )}
+            </dd>
+          </div>
+        </dl>
+      </section>
 
       <form
         className='panel search-grid'

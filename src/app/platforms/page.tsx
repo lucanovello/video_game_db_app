@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { toSingle } from "@/lib/validation";
+import { getPlatformImageUrlFromClaims } from "@/lib/wikidata-image";
 
 const PAGE_SIZE = 24;
 
@@ -62,6 +63,7 @@ export default async function PlatformsPage({
     type: string | null;
     sitelinks: number;
     wikiProjectGameCount: number | null;
+    claimsJson: Prisma.JsonValue | null;
   }> = [];
   let total = 0;
   let dbUnavailable = false;
@@ -82,6 +84,7 @@ export default async function PlatformsPage({
           type: true,
           sitelinks: true,
           wikiProjectGameCount: true,
+          claimsJson: true,
         },
       }),
       prisma.platform.count({ where }),
@@ -145,35 +148,45 @@ export default async function PlatformsPage({
       </div>
 
       <div className='games-grid'>
-        {platforms.map((platform) => (
-          <Link
-            key={platform.qid}
-            className='game-card'
-            href={toPlatformHref(platform)}
-          >
-            <h2 className='game-title'>{platform.name}</h2>
-            <p className='meta'>
-              {platform.qid}
-              {platform.releaseYear ? ` - ${platform.releaseYear}` : ""}
-            </p>
-            {platform.description ? (
-              <p className='meta'>{platform.description}</p>
-            ) : null}
-            <div className='chip-row'>
-              {platform.type ? (
-                <span className='chip'>
-                  {formatPlatformType(platform.type)}
-                </span>
+        {platforms.map((platform) => {
+          const imageUrl = getPlatformImageUrlFromClaims(platform.claimsJson);
+
+          return (
+            <Link
+              key={platform.qid}
+              className='game-card'
+              href={toPlatformHref(platform)}
+            >
+              {imageUrl ? (
+                <img
+                  className='entity-thumb'
+                  src={imageUrl}
+                  alt={`${platform.name} image`}
+                  loading='lazy'
+                />
               ) : null}
-              <span className='chip'>Sitelinks: {platform.sitelinks}</span>
-              {platform.wikiProjectGameCount !== null ? (
-                <span className='chip'>
-                  WVG games: {platform.wikiProjectGameCount}
-                </span>
+              <h2 className='game-title'>{platform.name}</h2>
+              <p className='meta'>
+                {platform.qid}
+                {platform.releaseYear ? ` - ${platform.releaseYear}` : ""}
+              </p>
+              {platform.description ? (
+                <p className='meta'>{platform.description}</p>
               ) : null}
-            </div>
-          </Link>
-        ))}
+              <div className='chip-row'>
+                {platform.type ? (
+                  <span className='chip'>{formatPlatformType(platform.type)}</span>
+                ) : null}
+                <span className='chip'>Sitelinks: {platform.sitelinks}</span>
+                {platform.wikiProjectGameCount !== null ? (
+                  <span className='chip'>
+                    WVG games: {platform.wikiProjectGameCount}
+                  </span>
+                ) : null}
+              </div>
+            </Link>
+          );
+        })}
       </div>
 
       {!dbUnavailable && platforms.length === 0 ? (

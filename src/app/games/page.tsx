@@ -200,6 +200,14 @@ export default async function GamesPage({ searchParams }: GamesPageProps) {
       <div className='games-grid'>
         {games.map((game) => (
           <article key={game.qid} className='game-card'>
+            {game.imageUrl ? (
+              <img
+                className='entity-thumb'
+                src={game.imageUrl}
+                alt={`${game.title} cover`}
+                loading='lazy'
+              />
+            ) : null}
             <h2 className='game-title'>
               <Link
                 className='text-link strong-link'

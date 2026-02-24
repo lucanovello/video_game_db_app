@@ -89,32 +89,87 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
     .filter((entry) => entry.role === CompanyRole.PUBLISHER)
     .map((entry) => entry.company);
 
+  const platformNames = game.platforms.map((entry) => entry.platform.name);
+
   return (
-    <section className='stack'>
-      <header className='stack'>
+    <section className='stack detail-page'>
+      <header className='panel stack detail-header'>
         <h1 className='page-title'>{game.title}</h1>
-        <p className='muted'>
-          {game.qid}
-          {game.releaseYear ? ` • ${game.releaseYear}` : ""}
-        </p>
+        <p className='meta'>{game.qid}</p>
+        {game.imageUrl ? (
+          <img
+            className='entity-hero'
+            src={game.imageUrl}
+            alt={`${game.title} cover`}
+            loading='lazy'
+          />
+        ) : null}
         {game.description ? <p className='muted'>{game.description}</p> : null}
         <div className='chip-row'>
-          {game.platforms.map((entry) => (
-            <Link
-              key={entry.platform.qid}
-              className='chip chip-link'
-              href={toPlatformHref(entry.platform)}
-            >
-              {entry.platform.name}
-            </Link>
-          ))}
+          <span className='chip'>Release year: {game.releaseYear ?? "n/a"}</span>
+          <span className='chip'>Reviews: {game.reviews.length}</span>
         </div>
       </header>
 
       <div className='two-col'>
         <div className='stack'>
           <section className='panel stack'>
-            <h2 className='game-title'>Details</h2>
+            <h2 className='game-title'>Quick facts</h2>
+            <dl className='detail-grid'>
+              <div className='detail-row'>
+                <dt>QID</dt>
+                <dd>{game.qid}</dd>
+              </div>
+              <div className='detail-row'>
+                <dt>Release year</dt>
+                <dd>{game.releaseYear ?? "n/a"}</dd>
+              </div>
+              <div className='detail-row'>
+                <dt>Platforms</dt>
+                <dd>
+                  {platformNames.length ? platformNames.join(", ") : "n/a"}
+                </dd>
+              </div>
+              <div className='detail-row'>
+                <dt>Developers</dt>
+                <dd>
+                  {developers.length
+                    ? developers.map((item) => item.name).join(", ")
+                    : "n/a"}
+                </dd>
+              </div>
+              <div className='detail-row'>
+                <dt>Publishers</dt>
+                <dd>
+                  {publishers.length
+                    ? publishers.map((item) => item.name).join(", ")
+                    : "n/a"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className='panel stack'>
+            <h2 className='game-title'>Platforms</h2>
+            <div className='chip-row'>
+              {game.platforms.length ? (
+                game.platforms.map((entry) => (
+                  <Link
+                    key={entry.platform.qid}
+                    className='chip chip-link'
+                    href={toPlatformHref(entry.platform)}
+                  >
+                    {entry.platform.name}
+                  </Link>
+                ))
+              ) : (
+                <p className='muted'>No linked platforms.</p>
+              )}
+            </div>
+          </section>
+
+          <section className='panel stack'>
+            <h2 className='game-title'>Metadata</h2>
             <div className='chip-row'>
               {tagGroups.genres.map((tag) => (
                 <span key={tag.id} className='chip'>
@@ -137,18 +192,12 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
                 </span>
               ))}
             </div>
-            <p className='meta'>
-              Developers:{" "}
-              {developers.length
-                ? developers.map((item) => item.name).join(", ")
-                : "n/a"}
-            </p>
-            <p className='meta'>
-              Publishers:{" "}
-              {publishers.length
-                ? publishers.map((item) => item.name).join(", ")
-                : "n/a"}
-            </p>
+            {!tagGroups.genres.length &&
+            !tagGroups.series.length &&
+            !tagGroups.engines.length &&
+            !tagGroups.modes.length ? (
+              <p className='muted'>No metadata tags available.</p>
+            ) : null}
           </section>
 
           <section className='panel stack'>
@@ -175,7 +224,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           </section>
         </div>
 
-        <aside className='stack'>
+        <aside className='stack detail-sidebar'>
           <form className='panel stack' action='/api/logs' method='post'>
             <h2 className='game-title'>Log Play</h2>
             <input type='hidden' name='gameQid' value={game.qid} />
