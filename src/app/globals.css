@@ -276,7 +276,8 @@ textarea:focus-visible {
   font-weight: 600;
   cursor: pointer;
   padding: 10px 16px;
-  box-shadow: 0 8px 18px color-mix(in srgb, var(--accent-strong) 35%, transparent);
+  box-shadow: 0 8px 18px
+    color-mix(in srgb, var(--accent-strong) 35%, transparent);
 }
 
 .button.secondary {
