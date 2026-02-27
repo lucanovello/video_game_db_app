@@ -18,9 +18,20 @@ export async function GET(_request: NextRequest, context: RouteContext) {
       imageCommons: true,
       releaseYear: true,
       platforms: {
-        select: {
+        include: {
           platform: {
-            select: { qid: true, name: true },
+            select: {
+              qid: true,
+              name: true,
+              slug: true,
+              controllers: {
+                select: {
+                  controller: {
+                    select: { qid: true, name: true },
+                  },
+                },
+              },
+            },
           },
         },
       },
@@ -37,6 +48,33 @@ export async function GET(_request: NextRequest, context: RouteContext) {
           company: {
             select: { qid: true, name: true },
           },
+        },
+      },
+      releaseDates: {
+        orderBy: [{ date: "asc" }, { year: "asc" }],
+        include: {
+          platform: { select: { qid: true, name: true, slug: true } },
+        },
+      },
+      websites: {
+        orderBy: { category: "asc" },
+      },
+      externalGames: {
+        orderBy: { category: "asc" },
+      },
+      scores: {
+        orderBy: [{ provider: "asc" }],
+      },
+      outgoingRelations: {
+        orderBy: { kind: "asc" },
+        include: {
+          toGame: { select: { qid: true, title: true, releaseYear: true } },
+        },
+      },
+      incomingRelations: {
+        orderBy: { kind: "asc" },
+        include: {
+          fromGame: { select: { qid: true, title: true, releaseYear: true } },
         },
       },
       reviews: {

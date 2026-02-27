@@ -32,6 +32,38 @@ export default function HomePage() {
           <span className='chip'>/platforms</span>
         </Link>
 
+        <Link className='panel stack' href='/companies'>
+          <h2 className='game-title'>Browse Companies</h2>
+          <p className='muted'>
+            Explore developer and publisher pages with linked game credits.
+          </p>
+          <span className='chip'>/companies</span>
+        </Link>
+
+        <Link className='panel stack' href='/controllers'>
+          <h2 className='game-title'>Browse Controllers</h2>
+          <p className='muted'>
+            Inspect platform input-device compatibility sourced from Wikidata.
+          </p>
+          <span className='chip'>/controllers</span>
+        </Link>
+
+        <Link className='panel stack' href='/tags'>
+          <h2 className='game-title'>Browse Tags</h2>
+          <p className='muted'>
+            Navigate genres, themes, engines, series, and related taxonomy.
+          </p>
+          <span className='chip'>/tags</span>
+        </Link>
+
+        <Link className='panel stack' href='/activity'>
+          <h2 className='game-title'>View Activity</h2>
+          <p className='muted'>
+            Follow recent logs, reviews, and list updates across users.
+          </p>
+          <span className='chip'>/activity</span>
+        </Link>
+
         <Link className='panel stack' href='/u/demo_user'>
           <h2 className='game-title'>Open a Profile</h2>
           <p className='muted'>

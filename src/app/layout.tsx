@@ -54,6 +54,10 @@ export default function RootLayout({
               <nav className='topnav'>
                 <NavLink href='/games'>Games</NavLink>
                 <NavLink href='/platforms'>Platforms</NavLink>
+                <NavLink href='/companies'>Companies</NavLink>
+                <NavLink href='/controllers'>Controllers</NavLink>
+                <NavLink href='/tags'>Tags</NavLink>
+                <NavLink href='/activity'>Activity</NavLink>
                 <NavLink href='/u/demo_user'>Profile</NavLink>
               </nav>
               <ThemeToggle />

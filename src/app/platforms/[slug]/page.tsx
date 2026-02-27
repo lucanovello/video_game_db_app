@@ -199,6 +199,8 @@ export default async function PlatformDetailPage({
     wikiProjectGameCount: number | null;
     url: string | null;
     claimsJson: Prisma.JsonValue | null;
+    controllers: Array<{ controller: { qid: string; name: string } }>;
+    families: Array<{ family: { qid: string; name: string } }>;
   } | null = null;
 
   try {
@@ -220,6 +222,20 @@ export default async function PlatformDetailPage({
         wikiProjectGameCount: true,
         url: true,
         claimsJson: true,
+        controllers: {
+          select: {
+            controller: {
+              select: { qid: true, name: true },
+            },
+          },
+        },
+        families: {
+          select: {
+            family: {
+              select: { qid: true, name: true },
+            },
+          },
+        },
       },
     });
   } catch (error: unknown) {
@@ -375,6 +391,40 @@ export default async function PlatformDetailPage({
             </dd>
           </div>
         </dl>
+      </section>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Controllers</h2>
+        <div className='chip-row'>
+          {platform.controllers.length ? (
+            platform.controllers.map((entry) => (
+              <Link
+                key={entry.controller.qid}
+                className='chip chip-link'
+                href={`/controllers/${entry.controller.qid.toLowerCase()}`}
+              >
+                {entry.controller.name}
+              </Link>
+            ))
+          ) : (
+            <p className='muted'>No linked controllers.</p>
+          )}
+        </div>
+      </section>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Platform families</h2>
+        <div className='chip-row'>
+          {platform.families.length ? (
+            platform.families.map((entry) => (
+              <span key={entry.family.qid} className='chip'>
+                {entry.family.name}
+              </span>
+            ))
+          ) : (
+            <p className='muted'>No linked families.</p>
+          )}
+        </div>
       </section>
 
       <form

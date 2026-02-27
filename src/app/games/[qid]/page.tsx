@@ -2,13 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CompanyRole, TagKind } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import Image from "next/image";
 
 interface GameDetailPageProps {
   params: Promise<{ qid: string }>;
-}
-
-function sortByLabel<T extends { label: string }>(items: T[]): T[] {
-  return [...items].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function toPlatformHref(platform: {
@@ -16,8 +13,22 @@ function toPlatformHref(platform: {
   qid: string;
 }): string {
   const qidSuffix = platform.qid.toLowerCase();
-  if (!platform.slug) return `/platforms/${qidSuffix}`;
-  return `/platforms/${platform.slug}-${qidSuffix}`;
+  return platform.slug
+    ? `/platforms/${platform.slug}-${qidSuffix}`
+    : `/platforms/${qidSuffix}`;
+}
+
+function toTagHref(tag: { kind: TagKind; id: string; label: string }): string {
+  const slug = tag.label
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return `/tags/${tag.kind.toLowerCase()}/${slug}-${tag.id.toLowerCase()}`;
+}
+
+function sortByLabel<T extends { label: string }>(items: T[]): T[] {
+  return [...items].sort((a, b) => a.label.localeCompare(b.label));
 }
 
 export default async function GameDetailPage({ params }: GameDetailPageProps) {
@@ -27,32 +38,46 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
     where: { qid },
     include: {
       platforms: {
-        select: {
+        include: {
           platform: {
-            select: { qid: true, slug: true, name: true },
+            select: {
+              qid: true,
+              slug: true,
+              name: true,
+              controllers: {
+                select: {
+                  controller: { select: { qid: true, name: true } },
+                },
+              },
+            },
           },
         },
       },
-      tags: {
-        select: {
-          tag: {
-            select: { id: true, kind: true, label: true },
-          },
-        },
-      },
-      companies: {
-        select: {
-          role: true,
-          company: {
-            select: { qid: true, name: true },
-          },
-        },
-      },
+      tags: { include: { tag: true } },
+      companies: { include: { company: true } },
       reviews: {
         orderBy: { createdAt: "desc" },
+        include: { user: { select: { handle: true } } },
+      },
+      scores: {
+        orderBy: [{ provider: "asc" }],
+        select: { provider: true, score: true, count: true },
+      },
+      releaseDates: {
+        orderBy: [{ date: "asc" }, { year: "asc" }],
         include: {
-          user: { select: { handle: true } },
+          platform: { select: { qid: true, slug: true, name: true } },
         },
+      },
+      websites: { orderBy: { category: "asc" } },
+      externalGames: { orderBy: { category: "asc" } },
+      outgoingRelations: {
+        orderBy: { kind: "asc" },
+        include: { toGame: { select: { qid: true, title: true } } },
+      },
+      incomingRelations: {
+        orderBy: { kind: "asc" },
+        include: { fromGame: { select: { qid: true, title: true } } },
       },
     },
   });
@@ -82,14 +107,23 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
     ),
   };
 
-  const developers = game.companies
-    .filter((entry) => entry.role === CompanyRole.DEVELOPER)
-    .map((entry) => entry.company);
-  const publishers = game.companies
-    .filter((entry) => entry.role === CompanyRole.PUBLISHER)
-    .map((entry) => entry.company);
+  const compatibleControllers = [
+    ...new Map(
+      game.platforms.flatMap((entry) =>
+        entry.platform.controllers.map((link) => [
+          link.controller.qid,
+          link.controller,
+        ]),
+      ),
+    ).values(),
+  ].sort((a, b) => a.name.localeCompare(b.name));
 
-  const platformNames = game.platforms.map((entry) => entry.platform.name);
+  const developers = game.companies.filter(
+    (entry) => entry.role === CompanyRole.DEVELOPER,
+  );
+  const publishers = game.companies.filter(
+    (entry) => entry.role === CompanyRole.PUBLISHER,
+  );
 
   return (
     <section className='stack detail-page'>
@@ -97,7 +131,7 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
         <h1 className='page-title'>{game.title}</h1>
         <p className='meta'>{game.qid}</p>
         {game.imageUrl ? (
-          <img
+          <Image
             className='entity-hero'
             src={game.imageUrl}
             alt={`${game.title} cover`}
@@ -105,203 +139,210 @@ export default async function GameDetailPage({ params }: GameDetailPageProps) {
           />
         ) : null}
         {game.description ? <p className='muted'>{game.description}</p> : null}
-        <div className='chip-row'>
-          <span className='chip'>Release year: {game.releaseYear ?? "n/a"}</span>
-          <span className='chip'>Reviews: {game.reviews.length}</span>
-        </div>
       </header>
 
-      <div className='two-col'>
-        <div className='stack'>
-          <section className='panel stack'>
-            <h2 className='game-title'>Quick facts</h2>
-            <dl className='detail-grid'>
-              <div className='detail-row'>
-                <dt>QID</dt>
-                <dd>{game.qid}</dd>
-              </div>
-              <div className='detail-row'>
-                <dt>Release year</dt>
-                <dd>{game.releaseYear ?? "n/a"}</dd>
-              </div>
-              <div className='detail-row'>
-                <dt>Platforms</dt>
-                <dd>
-                  {platformNames.length ? platformNames.join(", ") : "n/a"}
-                </dd>
-              </div>
-              <div className='detail-row'>
-                <dt>Developers</dt>
-                <dd>
-                  {developers.length
-                    ? developers.map((item) => item.name).join(", ")
-                    : "n/a"}
-                </dd>
-              </div>
-              <div className='detail-row'>
-                <dt>Publishers</dt>
-                <dd>
-                  {publishers.length
-                    ? publishers.map((item) => item.name).join(", ")
-                    : "n/a"}
-                </dd>
-              </div>
-            </dl>
-          </section>
-
-          <section className='panel stack'>
-            <h2 className='game-title'>Platforms</h2>
-            <div className='chip-row'>
-              {game.platforms.length ? (
-                game.platforms.map((entry) => (
-                  <Link
-                    key={entry.platform.qid}
-                    className='chip chip-link'
-                    href={toPlatformHref(entry.platform)}
-                  >
-                    {entry.platform.name}
-                  </Link>
-                ))
-              ) : (
-                <p className='muted'>No linked platforms.</p>
-              )}
-            </div>
-          </section>
-
-          <section className='panel stack'>
-            <h2 className='game-title'>Metadata</h2>
-            <div className='chip-row'>
-              {tagGroups.genres.map((tag) => (
-                <span key={tag.id} className='chip'>
-                  Genre: {tag.label}
-                </span>
-              ))}
-              {tagGroups.series.map((tag) => (
-                <span key={tag.id} className='chip'>
-                  Series: {tag.label}
-                </span>
-              ))}
-              {tagGroups.engines.map((tag) => (
-                <span key={tag.id} className='chip'>
-                  Engine: {tag.label}
-                </span>
-              ))}
-              {tagGroups.modes.map((tag) => (
-                <span key={tag.id} className='chip'>
-                  Mode: {tag.label}
-                </span>
-              ))}
-            </div>
-            {!tagGroups.genres.length &&
-            !tagGroups.series.length &&
-            !tagGroups.engines.length &&
-            !tagGroups.modes.length ? (
-              <p className='muted'>No metadata tags available.</p>
-            ) : null}
-          </section>
-
-          <section className='panel stack'>
-            <h2 className='game-title'>Reviews</h2>
-            {game.reviews.length ? (
-              <ul className='list-reset'>
-                {game.reviews.map((review) => (
-                  <li key={review.id} className='review-item stack'>
-                    <p className='meta'>
-                      @{review.user.handle}
-                      {review.rating !== null ? ` • ${review.rating}/10` : ""}
-                    </p>
-                    {review.body ? (
-                      <p>{review.body}</p>
-                    ) : (
-                      <p className='meta'>No text review.</p>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className='muted'>No reviews yet.</p>
-            )}
-          </section>
+      <section className='panel stack'>
+        <h2 className='game-title'>Platforms</h2>
+        <div className='chip-row'>
+          {game.platforms.map((entry) => (
+            <Link
+              key={entry.platform.qid}
+              className='chip chip-link'
+              href={toPlatformHref(entry.platform)}
+            >
+              {entry.platform.name}
+            </Link>
+          ))}
         </div>
+      </section>
 
-        <aside className='stack detail-sidebar'>
-          <form className='panel stack' action='/api/logs' method='post'>
-            <h2 className='game-title'>Log Play</h2>
-            <input type='hidden' name='gameQid' value={game.qid} />
-            <input
-              type='hidden'
-              name='redirectTo'
-              value={`/games/${game.qid}`}
-            />
+      <section className='panel stack'>
+        <h2 className='game-title'>Metadata tags</h2>
+        <div className='chip-row'>
+          {[
+            ...tagGroups.genres,
+            ...tagGroups.series,
+            ...tagGroups.engines,
+            ...tagGroups.modes,
+          ].map((tag) => (
+            <Link key={tag.id} className='chip chip-link' href={toTagHref(tag)}>
+              {tag.label}
+            </Link>
+          ))}
+        </div>
+      </section>
 
-            <label className='field'>
-              Handle
-              <input
-                className='input'
-                name='handle'
-                defaultValue='demo_user'
-                required
-              />
-            </label>
-            <label className='field'>
-              Played on
-              <input className='input' type='date' name='playedOn' />
-            </label>
-            <label className='field'>
-              Notes
-              <textarea
-                className='textarea'
-                name='notes'
-                placeholder='Session notes...'
-              />
-            </label>
-            <button className='button' type='submit'>
-              Save log
-            </button>
-          </form>
+      <section className='panel stack'>
+        <h2 className='game-title'>Companies</h2>
+        <ul className='list-reset'>
+          {developers.map((entry) => (
+            <li key={`${entry.companyQid}:dev`}>
+              <Link
+                className='text-link strong-link'
+                href={`/companies/${entry.companyQid.toLowerCase()}`}
+              >
+                {entry.company.name}
+              </Link>
+              <span className='meta'> • developer</span>
+            </li>
+          ))}
+          {publishers.map((entry) => (
+            <li key={`${entry.companyQid}:pub`}>
+              <Link
+                className='text-link strong-link'
+                href={`/companies/${entry.companyQid.toLowerCase()}`}
+              >
+                {entry.company.name}
+              </Link>
+              <span className='meta'> • publisher</span>
+            </li>
+          ))}
+        </ul>
+        {!developers.length && !publishers.length ? (
+          <p className='muted'>No linked companies.</p>
+        ) : null}
+      </section>
 
-          <form className='panel stack' action='/api/reviews' method='post'>
-            <h2 className='game-title'>Write / Update Review</h2>
-            <input type='hidden' name='gameQid' value={game.qid} />
-            <input
-              type='hidden'
-              name='redirectTo'
-              value={`/games/${game.qid}`}
-            />
+      <section className='panel stack'>
+        <h2 className='game-title'>Release timeline</h2>
+        {game.releaseDates.length ? (
+          <ul className='list-reset'>
+            {game.releaseDates.map((item) => (
+              <li key={item.id}>
+                {item.human ?? "n/a"}
+                {item.platform ? (
+                  <>
+                    {" "}
+                    <Link
+                      className='text-link strong-link'
+                      href={toPlatformHref(item.platform)}
+                    >
+                      {item.platform.name}
+                    </Link>
+                  </>
+                ) : null}
+                {item.rank ? (
+                  <span className='meta'> • {item.rank.toLowerCase()}</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className='muted'>No release dates.</p>
+        )}
+      </section>
 
-            <label className='field'>
-              Handle
-              <input
-                className='input'
-                name='handle'
-                defaultValue='demo_user'
-                required
-              />
-            </label>
-            <label className='field'>
-              Rating (1-10)
-              <input
-                className='input'
-                type='number'
-                name='rating'
-                min={1}
-                max={10}
-              />
-            </label>
-            <label className='field'>
-              Review
-              <textarea
-                className='textarea'
-                name='body'
-                placeholder='Why did this game work (or not)?'
-              />
-            </label>
-            <button className='button secondary' type='submit'>
-              Save review
-            </button>
-          </form>
-        </aside>
-      </div>
+      <section className='panel stack'>
+        <h2 className='game-title'>Controllers (via platforms)</h2>
+        <div className='chip-row'>
+          {compatibleControllers.map((controller) => (
+            <Link
+              key={controller.qid}
+              className='chip chip-link'
+              href={`/controllers/${controller.qid.toLowerCase()}`}
+            >
+              {controller.name}
+            </Link>
+          ))}
+        </div>
+        {!compatibleControllers.length ? (
+          <p className='muted'>No linked controllers.</p>
+        ) : null}
+      </section>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Links and IDs</h2>
+        <ul className='list-reset'>
+          {game.websites.map((site) => (
+            <li key={site.id}>
+              <Link
+                className='text-link strong-link'
+                href={site.url}
+                target='_blank'
+                rel='noreferrer'
+              >
+                {site.category.toLowerCase()}
+              </Link>
+            </li>
+          ))}
+          {game.externalGames.map((item) => (
+            <li key={item.id}>
+              {item.category.toLowerCase()}
+              {item.uid ? <span className='meta'> • {item.uid}</span> : null}
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Scores</h2>
+        {game.scores.length ? (
+          <ul className='list-reset'>
+            {game.scores.map((score) => (
+              <li key={score.provider}>
+                {score.provider.toLowerCase()} • {score.score}
+                {score.count !== null ? (
+                  <span className='meta'> ({score.count})</span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className='muted'>No scores available.</p>
+        )}
+      </section>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Game relations</h2>
+        <ul className='list-reset'>
+          {game.outgoingRelations.map((relation) => (
+            <li key={`out:${relation.id}`}>
+              <span className='meta'>{relation.kind.toLowerCase()}</span>{" "}
+              <Link
+                className='text-link strong-link'
+                href={`/games/${relation.toGame.qid}`}
+              >
+                {relation.toGame.title}
+              </Link>
+            </li>
+          ))}
+          {game.incomingRelations.map((relation) => (
+            <li key={`in:${relation.id}`}>
+              <span className='meta'>
+                incoming {relation.kind.toLowerCase()}
+              </span>{" "}
+              <Link
+                className='text-link strong-link'
+                href={`/games/${relation.fromGame.qid}`}
+              >
+                {relation.fromGame.title}
+              </Link>
+            </li>
+          ))}
+        </ul>
+        {!game.outgoingRelations.length && !game.incomingRelations.length ? (
+          <p className='muted'>No linked relations.</p>
+        ) : null}
+      </section>
+
+      <section className='panel stack'>
+        <h2 className='game-title'>Reviews</h2>
+        {game.reviews.length ? (
+          <ul className='list-reset'>
+            {game.reviews.map((review) => (
+              <li key={review.id} className='review-item stack'>
+                <p className='meta'>
+                  @{review.user.handle}
+                  {review.rating !== null ? ` • ${review.rating}/10` : ""}
+                </p>
+                <p>{review.body ?? "No text review."}</p>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className='muted'>No reviews yet.</p>
+        )}
+      </section>
     </section>
   );
 }
