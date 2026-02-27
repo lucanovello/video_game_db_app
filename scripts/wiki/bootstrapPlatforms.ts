@@ -8,10 +8,11 @@ type PlatformSeed = {
 };
 
 const SOURCE_TYPE = "WIKIPEDIA_LIST";
+const SOURCE_SITE = "wikipedia:en";
 
 const PLATFORM_SEEDS: PlatformSeed[] = [
   {
-    qid: "Q10680",
+    qid: "Q183259",
     nameLabel: "Super Nintendo Entertainment System",
     rosterPageTitle: "List of Super Nintendo Entertainment System games",
   },
@@ -26,19 +27,19 @@ const PLATFORM_SEEDS: PlatformSeed[] = [
     rosterPageTitle: "List of Nintendo 64 games",
   },
   {
-    qid: "Q10683",
+    qid: "Q10677",
     nameLabel: "PlayStation",
     rosterPageTitle: "List of PlayStation games (A–L)",
     notes:
       "PlayStation list is split across multiple pages; this is a starter source.",
   },
   {
-    qid: "Q170325",
+    qid: "Q10680",
     nameLabel: "PlayStation 2",
     rosterPageTitle: "List of PlayStation 2 games",
   },
   {
-    qid: "Q751046",
+    qid: "Q132020",
     nameLabel: "Xbox",
     rosterPageTitle: "List of Xbox games",
   },
@@ -48,7 +49,7 @@ const PLATFORM_SEEDS: PlatformSeed[] = [
     rosterPageTitle: "List of Xbox 360 games",
   },
   {
-    qid: "Q188808",
+    qid: "Q182172",
     nameLabel: "GameCube",
     rosterPageTitle: "List of GameCube games",
   },
@@ -99,6 +100,8 @@ async function main() {
   let registryUpdated = 0;
   let sourceCreated = 0;
   let sourceUpdated = 0;
+  let sourceMigrated = 0;
+  let membershipsMigrated = 0;
 
   for (const seed of seeds) {
     const existingRegistry = await prisma.platformRegistry.findUnique({
@@ -131,6 +134,107 @@ async function main() {
     }
 
     const pageUrl = toWikipediaUrl(seed.rosterPageTitle);
+    const staleSources = await prisma.platformRosterSource.findMany({
+      where: {
+        sourceType: SOURCE_TYPE,
+        pageTitle: seed.rosterPageTitle,
+        platformQid: { not: seed.qid },
+      },
+      select: {
+        id: true,
+        platformQid: true,
+      },
+    });
+
+    if (staleSources.length) {
+      const sourcePages = await prisma.wikiPageCache.findMany({
+        where: {
+          site: SOURCE_SITE,
+          OR: [
+            { title: seed.rosterPageTitle },
+            { title: seed.rosterPageTitle.replaceAll("_", " ") },
+          ],
+        },
+        select: { id: true },
+      });
+      const sourcePageIds = sourcePages.map((row) => row.id);
+
+      const stalePlatformQids = staleSources.map((row) => row.platformQid);
+      const staleMemberships = await prisma.platformGameMembership.findMany({
+        where: sourcePageIds.length
+          ? {
+              platformQid: { in: stalePlatformQids },
+              sourcePageId: { in: sourcePageIds },
+            }
+          : {
+              platformQid: { in: stalePlatformQids },
+              sourcePage: { site: SOURCE_SITE },
+            },
+        select: {
+          gameQid: true,
+          sourcePageId: true,
+          regionHint: true,
+          dateHint: true,
+        },
+      });
+
+      if (staleMemberships.length) {
+        const created = await prisma.platformGameMembership.createMany({
+          data: staleMemberships.map((row) => ({
+            platformQid: seed.qid,
+            gameQid: row.gameQid,
+            sourcePageId: row.sourcePageId,
+            regionHint: row.regionHint,
+            dateHint: row.dateHint,
+          })),
+          skipDuplicates: true,
+        });
+        membershipsMigrated += created.count;
+
+        await prisma.platformGameMembership.deleteMany({
+          where: sourcePageIds.length
+            ? {
+                platformQid: { in: stalePlatformQids },
+                sourcePageId: { in: sourcePageIds },
+              }
+            : {
+                platformQid: { in: stalePlatformQids },
+                sourcePage: { site: SOURCE_SITE },
+              },
+        });
+      }
+
+      await prisma.platformRosterSource.updateMany({
+        where: {
+          id: { in: staleSources.map((row) => row.id) },
+        },
+        data: {
+          isActive: false,
+          notes: `superseded_by:${seed.qid}`,
+        },
+      });
+
+      for (const stale of staleSources) {
+        const activeSourceCount = await prisma.platformRosterSource.count({
+          where: {
+            platformQid: stale.platformQid,
+            isActive: true,
+          },
+        });
+
+        if (activeSourceCount === 0) {
+          await prisma.platformRegistry.update({
+            where: { platformQid: stale.platformQid },
+            data: {
+              status: "INACTIVE",
+              notes: `superseded_by:${seed.qid}`,
+            },
+          });
+        }
+      }
+      sourceMigrated += staleSources.length;
+    }
+
     const existingSource = await prisma.platformRosterSource.findUnique({
       where: {
         platformQid_sourceType_pageTitle: {
@@ -179,7 +283,7 @@ async function main() {
     prisma.platformRegistry.count(),
     prisma.platformRosterSource.count(),
     prisma.platformRegistry.findUnique({
-      where: { platformQid: "Q10680" },
+      where: { platformQid: "Q183259" },
       select: {
         platformQid: true,
         nameLabel: true,
@@ -195,12 +299,12 @@ async function main() {
 
   const elapsedMs = Date.now() - startedAt;
   console.log(
-    `bootstrapPlatforms: seeds=${seeds.length} registryCreated=${registryCreated} registryUpdated=${registryUpdated} sourceCreated=${sourceCreated} sourceUpdated=${sourceUpdated} registryTotal=${registryTotal} sourceTotal=${sourceTotal} elapsedMs=${elapsedMs}`,
+    `bootstrapPlatforms: seeds=${seeds.length} registryCreated=${registryCreated} registryUpdated=${registryUpdated} sourceCreated=${sourceCreated} sourceUpdated=${sourceUpdated} sourceMigrated=${sourceMigrated} membershipsMigrated=${membershipsMigrated} registryTotal=${registryTotal} sourceTotal=${sourceTotal} elapsedMs=${elapsedMs}`,
   );
 
   if (snes) {
     console.log(
-      `bootstrapPlatforms: snes platformQid=${snes.platformQid} status=${snes.status} rosterSources=${snes.rosterSources.length} firstRosterTitle=${snes.rosterSources[0]?.pageTitle ?? "none"}`,
+      `bootstrapPlatforms: check platformQid=${snes.platformQid} status=${snes.status} rosterSources=${snes.rosterSources.length} firstRosterTitle=${snes.rosterSources[0]?.pageTitle ?? "none"}`,
     );
   }
 }

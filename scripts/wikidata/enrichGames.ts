@@ -6,6 +6,7 @@ import {
   Prisma,
   ReleaseDateCategory,
   ScoreProvider,
+  StatementRank,
   TagKind,
   VideoProvider,
   WebsiteCategory,
@@ -13,11 +14,8 @@ import {
 import { CONFIG } from "./lib/config";
 import { chunk } from "./lib/http";
 import { prisma } from "./lib/prisma";
-import {
-  commonsFileUrl,
-  wbGetEntitiesFull,
-  wbGetEntitiesLabels,
-} from "./lib/wikidataApi";
+import { WikiClient } from "../wiki/wikiClient";
+import { commonsFileUrl, wbGetEntitiesLabels } from "./lib/wikidataApi";
 import {
   getEnglishDescription,
   getEnglishLabel,
@@ -76,8 +74,6 @@ interface ParsedGameUpdate {
   sitelinks: number;
   wikiTitleEn: string | null;
   wikiUrlEn: string | null;
-  aggregatedRating: number | null;
-  aggregatedRatingCount: number | null;
 }
 
 interface BatchStats {
@@ -233,6 +229,17 @@ function parseReleaseDates(
       month: claim.month,
       day: claim.day,
       precision: claim.precision,
+      rank:
+        claim.rank === "preferred"
+          ? StatementRank.PREFERRED
+          : claim.rank === "normal"
+            ? StatementRank.NORMAL
+            : claim.rank === "deprecated"
+              ? StatementRank.DEPRECATED
+              : null,
+      platformQid: claim.platformQid,
+      regionQid: claim.regionQid,
+      calendarModel: "wikidata:gregorian",
       human: buildReleaseDateHuman({
         year: claim.year,
         month: claim.month,
@@ -241,6 +248,7 @@ function parseReleaseDates(
       }),
       source: "wikidata:P577",
       claimId: claim.claimId,
+      claimJson: claim.claimJson as Prisma.InputJsonValue | undefined,
     });
   }
 
@@ -371,24 +379,6 @@ function parseScoreRows(
   return median ? [median] : [];
 }
 
-function summarizeExternalScore(claims: WikidataClaims | undefined): {
-  aggregatedRating: number | null;
-  aggregatedRatingCount: number | null;
-} {
-  const values = extractQuantityClaims(claims, "P444").map(
-    (entry) => entry.amount,
-  );
-  if (!values.length) {
-    return { aggregatedRating: null, aggregatedRatingCount: null };
-  }
-
-  const avg = values.reduce((sum, value) => sum + value, 0) / values.length;
-  return {
-    aggregatedRating: Number(avg.toFixed(2)),
-    aggregatedRatingCount: values.length,
-  };
-}
-
 function extractFirstReleaseAt(
   claims: WikidataClaims | undefined,
 ): Date | null {
@@ -438,6 +428,36 @@ async function fetchLabelMap(
         label: getEnglishLabel(entity) ?? qid,
         description: getEnglishDescription(entity),
       });
+    }
+  }
+
+  return map;
+}
+
+function toWikidataEntity(qid: string, raw: unknown): WikidataEntity {
+  if (!raw || typeof raw !== "object") {
+    throw new Error(`Invalid cached entity JSON for ${qid}`);
+  }
+  return { ...(raw as Record<string, unknown>), id: qid } as WikidataEntity;
+}
+
+async function fetchEntityMap(
+  client: WikiClient,
+  qids: string[],
+): Promise<Map<string, WikidataEntity>> {
+  const map = new Map<string, WikidataEntity>();
+
+  for (const qid of qids) {
+    try {
+      const cached = await client.getOrFetchWikidataEntity(qid);
+      const entity = toWikidataEntity(qid, cached.entityJson);
+      if (!entity.missing) {
+        map.set(qid, entity);
+      }
+    } catch (error) {
+      console.warn(
+        `enrichGames: failed to hydrate qid=${qid} error=${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -503,8 +523,6 @@ function buildGameUpdate(
       sitelinks: 0,
       wikiTitleEn: null,
       wikiUrlEn: null,
-      aggregatedRating: null,
-      aggregatedRatingCount: null,
     };
   }
 
@@ -516,8 +534,6 @@ function buildGameUpdate(
     (wikiTitleEn
       ? `https://en.wikipedia.org/wiki/${encodeURIComponent(wikiTitleEn)}`
       : null);
-  const scoreSummary = summarizeExternalScore(entity.claims);
-
   return {
     qid: game.qid,
     title: getEnglishLabel(entity) ?? game.title,
@@ -531,17 +547,16 @@ function buildGameUpdate(
     sitelinks,
     wikiTitleEn,
     wikiUrlEn,
-    aggregatedRating: scoreSummary.aggregatedRating,
-    aggregatedRatingCount: scoreSummary.aggregatedRatingCount,
   };
 }
 
 async function enrichBatch(
   games: CandidateGame[],
   writeLimiter: ReturnType<typeof pLimit>,
+  client: WikiClient,
 ): Promise<BatchStats> {
   const qids = games.map((game) => game.qid);
-  const response = await wbGetEntitiesFull(qids);
+  const entityMap = await fetchEntityMap(client, qids);
 
   const updates: ParsedGameUpdate[] = [];
   const allTagLinks: ParsedTagLink[] = [];
@@ -555,7 +570,7 @@ async function enrichBatch(
   const allScores: Prisma.GameScoreCreateManyInput[] = [];
 
   for (const game of games) {
-    const entity = response.entities[game.qid];
+    const entity = entityMap.get(game.qid);
     const claims = entity?.claims;
 
     updates.push(buildGameUpdate(game, entity));
@@ -760,8 +775,6 @@ async function enrichBatch(
                 sitelinks: update.sitelinks,
                 wikiTitleEn: update.wikiTitleEn,
                 wikiUrlEn: update.wikiUrlEn,
-                aggregatedRating: update.aggregatedRating,
-                aggregatedRatingCount: update.aggregatedRatingCount,
                 lastEnrichedAt: new Date(),
               },
             });
@@ -790,13 +803,14 @@ async function enrichBatch(
 async function enrichBatchMinimal(
   games: CandidateGame[],
   writeLimiter: ReturnType<typeof pLimit>,
+  client: WikiClient,
 ): Promise<BatchStats> {
   const qids = games.map((game) => game.qid);
-  const response = await wbGetEntitiesFull(qids);
+  const entityMap = await fetchEntityMap(client, qids);
 
   const updates: ParsedGameUpdate[] = [];
   for (const game of games) {
-    const entity = response.entities[game.qid];
+    const entity = entityMap.get(game.qid);
     updates.push(buildGameUpdate(game, entity));
   }
 
@@ -819,8 +833,6 @@ async function enrichBatchMinimal(
                 sitelinks: update.sitelinks,
                 wikiTitleEn: update.wikiTitleEn,
                 wikiUrlEn: update.wikiUrlEn,
-                aggregatedRating: update.aggregatedRating,
-                aggregatedRatingCount: update.aggregatedRatingCount,
                 lastEnrichedAt: new Date(),
               },
             });
@@ -851,6 +863,11 @@ async function main() {
   const concurrency = Math.max(1, CONFIG.enrichConcurrency);
   const limit = pLimit(concurrency);
   const writeLimiter = pLimit(1);
+  const client = new WikiClient({
+    concurrency,
+    maxRetries: CONFIG.maxRetries,
+    timeoutMs: 30000,
+  });
 
   let cursorQid: string | null = null;
   let processedGames = 0;
@@ -899,8 +916,8 @@ async function main() {
       batches.map((batch) =>
         limit(() =>
           options.minimal
-            ? enrichBatchMinimal(batch, writeLimiter)
-            : enrichBatch(batch, writeLimiter),
+            ? enrichBatchMinimal(batch, writeLimiter, client)
+            : enrichBatch(batch, writeLimiter, client),
         ),
       ),
     );

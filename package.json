@@ -25,6 +25,7 @@
     "wd:hydrate-prop-meta:all": "tsx scripts/wikidata/hydratePropertyMetadata.ts --all",
     "wd:hydrate-games": "tsx scripts/wikidata/hydrateGamesFromClaims.ts",
     "wd:hydrate-games:membership": "tsx scripts/wikidata/hydrateGamesFromMembership.ts",
+    "wd:platform-relations": "tsx scripts/wikidata/hydratePlatformRelations.ts",
     "wiki:project:fetch": "tsx scripts/wiki/fetchWikiProjectVideoGamesLists.ts",
     "wiki:project:parse-qids": "tsx scripts/wiki/parseWikiProjectQids.ts",
     "wiki:platforms:bootstrap": "tsx scripts/wiki/bootstrapPlatforms.ts",
@@ -38,7 +39,8 @@
     "wd:scores": "tsx scripts/wikidata/backfillGameScores.ts",
     "wd:cleanup": "tsx scripts/wikidata/flagJunkGames.ts",
     "wd:coverage": "tsx scripts/wikidata/reportPlatformCoverage.ts",
-    "wd:etl": "npm run wd:platforms && npm run wd:platforms:backfill && npm run wd:platforms:enrich && npm run wd:platforms:major && npm run wd:games && npm run wd:enrich && npm run wd:scores && npm run wd:cleanup"
+    "wd:etl": "npm run wd:platforms && npm run wd:platforms:backfill && npm run wd:platforms:enrich && npm run wd:platforms:major && npm run wd:games && npm run wd:enrich && npm run wd:etl:claims && npm run wd:platform-relations && npm run wd:scores && npm run wd:cleanup",
+    "wd:etl:claims": "npm run wd:analyze-props && npm run wd:hydrate-prop-meta && npm run wd:hydrate-games"
   },
   "dependencies": {
     "@prisma/adapter-pg": "^7.4.0",
@@ -62,6 +64,5 @@
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^5"
-  },
-  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+  }
 }

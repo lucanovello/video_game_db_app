@@ -34,16 +34,6 @@ async function main() {
     const ratingCount = stats?.count ?? 0;
 
     await prisma.$transaction(async (tx) => {
-      await tx.game.update({
-        where: { qid: game.qid },
-        data: {
-          rating,
-          ratingCount: ratingCount || null,
-          totalRating: rating,
-          totalRatingCount: ratingCount || null,
-        },
-      });
-
       if (rating === null) {
         await tx.gameScore.deleteMany({
           where: { gameQid: game.qid, provider: ScoreProvider.INTERNAL },

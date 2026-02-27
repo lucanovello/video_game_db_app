@@ -78,6 +78,30 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null;
+
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  const asSeconds = Number.parseInt(trimmed, 10);
+  if (Number.isFinite(asSeconds) && asSeconds >= 0) {
+    return asSeconds * 1000;
+  }
+
+  const asDateMs = Date.parse(trimmed);
+  if (Number.isNaN(asDateMs)) return null;
+
+  const delay = asDateMs - Date.now();
+  return delay > 0 ? delay : 0;
+}
+
+function withJitterMs(baseMs: number): number {
+  const safeBase = Math.max(0, baseMs);
+  const jitterFactor = 0.8 + Math.random() * 0.4;
+  return Math.round(safeBase * jitterFactor);
+}
+
 function defaultUserAgent(): string {
   return (
     process.env.WIKIDATA_USER_AGENT ||
@@ -348,6 +372,7 @@ export class WikiClient {
     return this.queue(async () => {
       let attempt = 0;
       let backoffMs = this.retryBaseDelayMs;
+      const maxBackoffMs = 30000;
 
       while (true) {
         attempt += 1;
@@ -379,8 +404,15 @@ export class WikiClient {
           const retryable = [429, 500, 502, 503, 504].includes(response.status);
           if (retryable && attempt <= this.maxRetries) {
             clearTimeout(timeoutHandle);
-            await sleep(backoffMs);
-            backoffMs = Math.min(backoffMs * 2, 10000);
+
+            const retryAfterHeader = response.headers.get("retry-after");
+            const retryAfterMs = parseRetryAfterMs(retryAfterHeader);
+            const baseDelayMs =
+              retryAfterMs !== null ? retryAfterMs : backoffMs;
+            const delayMs = withJitterMs(baseDelayMs);
+
+            await sleep(delayMs);
+            backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
             continue;
           }
 
@@ -392,8 +424,8 @@ export class WikiClient {
         } catch (error) {
           clearTimeout(timeoutHandle);
           if (attempt <= this.maxRetries) {
-            await sleep(backoffMs);
-            backoffMs = Math.min(backoffMs * 2, 10000);
+            await sleep(withJitterMs(backoffMs));
+            backoffMs = Math.min(backoffMs * 2, maxBackoffMs);
             continue;
           }
 

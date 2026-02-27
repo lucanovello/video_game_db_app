@@ -144,6 +144,18 @@ enum PlatformType {
   OTHER
 }
 
+enum StatementRank {
+  PREFERRED
+  NORMAL
+  DEPRECATED
+}
+
+enum GameRelationKind {
+  PART_OF_SERIES
+  FOLLOWS
+  FOLLOWED_BY
+}
+
 model WikiPageCache {
   id          String   @id @default(cuid())
   site        String
@@ -272,6 +284,8 @@ model Platform {
 
   games        GamePlatform[]
   releaseDates ReleaseDate[]
+  controllers  PlatformController[]
+  families     PlatformFamilyMember[]
 
   @@index([isMajor])
   @@index([type])
@@ -321,12 +335,6 @@ model Game {
   sitelinks      Int           @default(0)
   wikiTitleEn    String?
   wikiUrlEn      String?
-  aggregatedRating      Float?
-  aggregatedRatingCount Int?
-  rating                Float?
-  ratingCount           Int?
-  totalRating           Float?
-  totalRatingCount      Int?
   lastEnrichedAt DateTime?
   createdAt      DateTime      @default(now())
   updatedAt      DateTime      @updatedAt
@@ -342,6 +350,8 @@ model Game {
   videos           GameVideo[]
   ageRatings       GameAgeRating[]
   scores           GameScore[]
+  outgoingRelations GameRelation[] @relation("GameRelationFrom")
+  incomingRelations GameRelation[] @relation("GameRelationTo")
   logs             GameLog[]
   reviews          Review[]
   listItems        ListItem[]
@@ -364,6 +374,8 @@ model ReleaseDate {
   month       Int?
   day         Int?
   precision   Int?
+  rank       StatementRank?
+  calendarModel String?
   human       String?
   source      String?
   claimId     String?
@@ -378,6 +390,86 @@ model ReleaseDate {
   @@index([gameQid, date])
   @@index([gameQid, year])
   @@index([platformQid])
+  @@index([rank])
+  @@index([gameQid, platformQid, regionQid, date])
+}
+
+model Controller {
+  qid         String   @id
+  name        String
+  description String?
+  source      String?
+  claimJson   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  platforms PlatformController[]
+
+  @@index([name])
+}
+
+model PlatformController {
+  platformQid  String
+  controllerQid String
+  source       String?
+  claimId      String?
+  claimJson    Json?
+  createdAt    DateTime @default(now())
+
+  platform   Platform   @relation(fields: [platformQid], references: [qid], onDelete: Cascade)
+  controller Controller @relation(fields: [controllerQid], references: [qid], onDelete: Cascade)
+
+  @@id([platformQid, controllerQid])
+  @@index([controllerQid])
+}
+
+model PlatformFamily {
+  qid         String   @id
+  name        String
+  description String?
+  source      String?
+  claimJson   Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  members PlatformFamilyMember[]
+
+  @@index([name])
+}
+
+model PlatformFamilyMember {
+  platformQid String
+  familyQid   String
+  generation  Int?
+  source      String?
+  claimId     String?
+  claimJson   Json?
+  createdAt   DateTime @default(now())
+
+  platform Platform       @relation(fields: [platformQid], references: [qid], onDelete: Cascade)
+  family   PlatformFamily @relation(fields: [familyQid], references: [qid], onDelete: Cascade)
+
+  @@id([platformQid, familyQid])
+  @@index([familyQid])
+}
+
+model GameRelation {
+  id          String           @id @default(cuid())
+  fromGameQid String
+  toGameQid   String
+  kind        GameRelationKind
+  source      String?
+  claimId     String?
+  claimJson   Json?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  fromGame Game @relation("GameRelationFrom", fields: [fromGameQid], references: [qid], onDelete: Cascade)
+  toGame   Game @relation("GameRelationTo", fields: [toGameQid], references: [qid], onDelete: Cascade)
+
+  @@unique([fromGameQid, toGameQid, kind])
+  @@index([toGameQid, kind])
+  @@index([fromGameQid, kind])
 }
 
 model Website {

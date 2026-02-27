@@ -75,11 +75,29 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+async function ensurePropertyRows(propertyIds: string[]): Promise<void> {
+  if (!propertyIds.length) return;
+
+  for (const group of chunk(propertyIds, 1000)) {
+    await prisma.wikidataProperty.createMany({
+      data: group.map((propertyId) => ({
+        propertyId,
+      })),
+      skipDuplicates: true,
+    });
+  }
+}
+
 async function writeUsageRows(
   usageByProperty: Map<string, PropertyAccumulator>,
   totalGames: number,
   mode: "truncate" | "upsert",
 ): Promise<void> {
+  const propertyIds = [...usageByProperty.keys()].sort((a, b) =>
+    a.localeCompare(b),
+  );
+  await ensurePropertyRows(propertyIds);
+
   const computedAt = new Date();
   const rows = [...usageByProperty.entries()]
     .map(([propertyId, stats]) => ({

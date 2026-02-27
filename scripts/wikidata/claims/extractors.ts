@@ -69,11 +69,39 @@ interface ExtractedStringClaim {
 
 interface ExtractedWikidataTimeClaim {
   claimId: string | null;
+  rank: "preferred" | "normal" | "deprecated" | null;
   time: string;
   precision: number | null;
   year: number | null;
   month: number | null;
   day: number | null;
+  platformQid: string | null;
+  regionQid: string | null;
+  claimJson: Record<string, unknown> | null;
+}
+
+function extractQualifierItemId(
+  claim: WikidataClaim,
+  propertyIds: string[],
+): string | null {
+  const qualifiers = claim.qualifiers;
+  if (!isObject(qualifiers)) return null;
+
+  for (const propertyId of propertyIds) {
+    const qualifierList = qualifiers[propertyId];
+    if (!Array.isArray(qualifierList)) continue;
+
+    for (const qualifierClaim of qualifierList) {
+      const raw = getClaimValue(qualifierClaim as WikidataClaim);
+      if (!isObject(raw)) continue;
+      const id = raw["id"];
+      if (typeof id === "string" && id.startsWith("Q")) {
+        return id;
+      }
+    }
+  }
+
+  return null;
 }
 
 interface ExtractedQuantityClaim {
@@ -173,11 +201,20 @@ export function extractReleaseDateClaims(
 
     out.set(key, {
       claimId,
+      rank:
+        claim.rank === "preferred" ||
+        claim.rank === "normal" ||
+        claim.rank === "deprecated"
+          ? claim.rank
+          : null,
       time: timeValue.trim(),
       precision,
       year,
       month,
       day,
+      platformQid: extractQualifierItemId(claim, ["P400"]),
+      regionQid: extractQualifierItemId(claim, ["P291", "P3005"]),
+      claimJson: isObject(claim) ? { ...claim } : null,
     });
   }
 

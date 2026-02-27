@@ -2,6 +2,7 @@ import {
   AgeRatingOrganization,
   CompanyRole,
   ExternalGameCategory,
+  GameRelationKind,
   GameImageKind,
   TagKind,
   VideoProvider,
@@ -25,6 +26,7 @@ export type PropertyTarget =
   | "gamePlatform"
   | "gameTag"
   | "gameCompany"
+  | "gameRelation"
   | "website"
   | "externalGame"
   | "gameVideo"
@@ -45,6 +47,7 @@ export interface PropertyRegistryEntry {
   source: string;
   tagKind?: TagKind;
   companyRole?: CompanyRole;
+  relationKind?: GameRelationKind;
   websiteCategory?: WebsiteCategory;
   externalCategory?: ExternalGameCategory;
   videoProvider?: VideoProvider;
@@ -91,6 +94,26 @@ export const PROPERTY_REGISTRY: ReadonlyArray<PropertyRegistryEntry> = [
     valueType: "item",
     source: "wikidata:P179",
     tagKind: TagKind.SERIES,
+  },
+  {
+    propertyId: "P155",
+    label: "follows",
+    status: "common",
+    target: "gameRelation",
+    cardinality: "multi",
+    valueType: "item",
+    source: "wikidata:P155",
+    relationKind: GameRelationKind.FOLLOWS,
+  },
+  {
+    propertyId: "P156",
+    label: "followed by",
+    status: "common",
+    target: "gameRelation",
+    cardinality: "multi",
+    valueType: "item",
+    source: "wikidata:P156",
+    relationKind: GameRelationKind.FOLLOWED_BY,
   },
   {
     propertyId: "P408",
@@ -262,6 +285,34 @@ export const PROPERTY_REGISTRY: ReadonlyArray<PropertyRegistryEntry> = [
 export const PROPERTY_REGISTRY_BY_ID = new Map(
   PROPERTY_REGISTRY.map((entry) => [entry.propertyId, entry]),
 );
+
+export function getTagPropertySpecs(): ReadonlyArray<{
+  propertyId: string;
+  kind: TagKind;
+  source: string;
+}> {
+  return PROPERTY_REGISTRY.filter(
+    (entry): entry is PropertyRegistryEntry & { tagKind: TagKind } =>
+      entry.target === "gameTag" && entry.tagKind !== undefined,
+  ).map((entry) => ({
+    propertyId: entry.propertyId,
+    kind: entry.tagKind,
+    source: entry.source,
+  }));
+}
+
+export function getCompanyPropertySpecs(): ReadonlyArray<{
+  propertyId: string;
+  role: CompanyRole;
+}> {
+  return PROPERTY_REGISTRY.filter(
+    (entry): entry is PropertyRegistryEntry & { companyRole: CompanyRole } =>
+      entry.target === "gameCompany" && entry.companyRole !== undefined,
+  ).map((entry) => ({
+    propertyId: entry.propertyId,
+    role: entry.companyRole,
+  }));
+}
 
 export function getHydratableRegistryEntries(
   includeNiche = true,

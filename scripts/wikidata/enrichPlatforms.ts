@@ -2,12 +2,13 @@ import { PlatformType, Prisma } from "@prisma/client";
 import { CONFIG } from "./lib/config";
 import { chunk } from "./lib/http";
 import { prisma } from "./lib/prisma";
+import { WikiClient } from "../wiki/wikiClient";
 import {
   extractEntityIds,
   extractReleaseDateClaims,
   extractStringClaims,
 } from "./claims";
-import { wbGetEntitiesFull, wbGetEntitiesLabels } from "./lib/wikidataApi";
+import { wbGetEntitiesLabels } from "./lib/wikidataApi";
 import {
   getEnglishDescription,
   getEnglishLabel,
@@ -218,8 +219,20 @@ function buildPlatformUpdate(
   };
 }
 
+function toWikidataEntity(qid: string, raw: unknown): WikidataEntity {
+  if (!raw || typeof raw !== "object") {
+    throw new Error(`Invalid cached entity JSON for ${qid}`);
+  }
+  return { ...(raw as Record<string, unknown>), id: qid } as WikidataEntity;
+}
+
 async function main() {
   const options = parseCliOptions(process.argv.slice(2));
+  const client = new WikiClient({
+    concurrency: Math.max(1, CONFIG.enrichConcurrency),
+    maxRetries: CONFIG.maxRetries,
+    timeoutMs: 30000,
+  });
 
   const targets = await prisma.platform.findMany({
     where: options.enrichAll
@@ -246,19 +259,31 @@ async function main() {
 
   for (const batch of chunk(targets, CONFIG.enrichBatchSize)) {
     const qids = batch.map((platform) => platform.qid);
-    const response = await wbGetEntitiesFull(qids);
+    const entityMap = new Map<string, WikidataEntity>();
+
+    for (const qid of qids) {
+      try {
+        const cached = await client.getOrFetchWikidataEntity(qid);
+        const entity = toWikidataEntity(qid, cached.entityJson);
+        if (!entity.missing) {
+          entityMap.set(qid, entity);
+        }
+      } catch (error) {
+        console.warn(
+          `enrichPlatforms: failed to hydrate qid=${qid} error=${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
 
     const entities = qids
-      .map((qid) => response.entities[qid])
-      .filter((entity): entity is WikidataEntity =>
-        Boolean(entity && !entity.missing),
-      );
+      .map((qid) => entityMap.get(qid))
+      .filter((entity): entity is WikidataEntity => Boolean(entity));
 
     const typeLabels = await fetchTypeLabelMap(entities);
     const updates: Prisma.PrismaPromise<unknown>[] = [];
 
     for (const target of batch) {
-      const entity = response.entities[target.qid];
+      const entity = entityMap.get(target.qid);
       if (!entity || entity.missing) continue;
 
       const update = buildPlatformUpdate(target, entity, typeLabels);
@@ -280,7 +305,7 @@ async function main() {
   }
 
   console.log(
-    `enrichPlatforms: done updated=${updated} scanned=${targets.length}`,
+    `enrichPlatforms: done updated=${updated} scanned=${targets.length} networkCalls=${client.stats.networkCalls}`,
   );
 }
 

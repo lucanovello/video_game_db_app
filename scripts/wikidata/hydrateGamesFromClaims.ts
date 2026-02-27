@@ -2,6 +2,7 @@ import {
   GameImageKind,
   Prisma,
   ReleaseDateCategory,
+  StatementRank,
   WebsiteCategory,
 } from "@prisma/client";
 import { commonsFileUrl } from "./lib/wikidataApi";
@@ -37,11 +38,15 @@ interface RankedValue<T> {
 interface TimeValue {
   claimId: string | null;
   rankScore: number;
+  rank: StatementRank | null;
   time: string;
   precision: number | null;
   year: number;
   month: number | null;
   day: number | null;
+  platformQid: string | null;
+  regionQid: string | null;
+  claimJson: Prisma.InputJsonValue | null;
 }
 
 interface BatchRows {
@@ -51,6 +56,7 @@ interface BatchRows {
   gamePlatformRows: Prisma.GamePlatformCreateManyInput[];
   gameTagRows: Prisma.GameTagCreateManyInput[];
   gameCompanyRows: Prisma.GameCompanyCreateManyInput[];
+  gameRelationRows: Prisma.GameRelationCreateManyInput[];
   releaseDateRows: Prisma.ReleaseDateCreateManyInput[];
   websiteRows: Prisma.WebsiteCreateManyInput[];
   externalGameRows: Prisma.ExternalGameCreateManyInput[];
@@ -107,6 +113,13 @@ function getRankScore(rank: unknown): number {
   if (rank === "preferred") return 2;
   if (rank === "normal") return 1;
   return 0;
+}
+
+function toStatementRank(rank: unknown): StatementRank | null {
+  if (rank === "preferred") return StatementRank.PREFERRED;
+  if (rank === "normal") return StatementRank.NORMAL;
+  if (rank === "deprecated") return StatementRank.DEPRECATED;
+  return null;
 }
 
 function normalizeString(value: unknown): string | null {
@@ -231,18 +244,50 @@ function extractTimeValues(statements: unknown[]): TimeValue[] {
     const parts = parseWikidataDateParts(time);
     if (parts.year === null) continue;
 
+    const platformQid = extractQualifierItemId(statement, ["P400"]);
+    const regionQid = extractQualifierItemId(statement, ["P291", "P3005"]);
+
     out.push({
       claimId: getClaimId(statement),
       rankScore: isObject(statement) ? getRankScore(statement.rank) : 0,
+      rank: isObject(statement) ? toStatementRank(statement.rank) : null,
       time,
       precision,
       year: parts.year,
       month: parts.month,
       day: parts.day,
+      platformQid,
+      regionQid,
+      claimJson: isObject(statement)
+        ? (statement as Prisma.InputJsonValue)
+        : null,
     });
   }
 
   return out;
+}
+
+function extractQualifierItemId(
+  statement: unknown,
+  qualifierPropertyIds: string[],
+): string | null {
+  if (!isObject(statement)) return null;
+  const qualifiersRaw = statement.qualifiers;
+  if (!isObject(qualifiersRaw)) return null;
+
+  for (const propertyId of qualifierPropertyIds) {
+    const qualifierValues = qualifiersRaw[propertyId];
+    if (!Array.isArray(qualifierValues)) continue;
+
+    for (const qualifier of qualifierValues) {
+      const value = getMainSnakDataValue(qualifier);
+      if (!isObject(value)) continue;
+      const id = normalizeString(value.id);
+      if (id && id.startsWith("Q")) return id;
+    }
+  }
+
+  return null;
 }
 
 function toReleaseDateCategory(
@@ -316,6 +361,7 @@ function parseBatch(
     gamePlatform: entries.filter((entry) => entry.target === "gamePlatform"),
     gameTag: entries.filter((entry) => entry.target === "gameTag"),
     gameCompany: entries.filter((entry) => entry.target === "gameCompany"),
+    gameRelation: entries.filter((entry) => entry.target === "gameRelation"),
     gameReleaseDate: entries.filter(
       (entry) => entry.target === "game.releaseDate",
     ),
@@ -333,6 +379,7 @@ function parseBatch(
   const gamePlatformRows: Prisma.GamePlatformCreateManyInput[] = [];
   const gameTagRows: Prisma.GameTagCreateManyInput[] = [];
   const gameCompanyRows: Prisma.GameCompanyCreateManyInput[] = [];
+  const gameRelationRows: Prisma.GameRelationCreateManyInput[] = [];
   const releaseDateRows: Prisma.ReleaseDateCreateManyInput[] = [];
   const websiteRows: Prisma.WebsiteCreateManyInput[] = [];
   const externalGameRows: Prisma.ExternalGameCreateManyInput[] = [];
@@ -400,6 +447,23 @@ function parseBatch(
       }
     }
 
+    for (const entry of byTarget.gameRelation) {
+      if (!entry.relationKind) continue;
+
+      const itemIds = extractItemIds(
+        getPropertyStatements(claims, entry.propertyId),
+      );
+
+      for (const item of itemIds) {
+        gameRelationRows.push({
+          fromGameQid: game.qid,
+          toGameQid: item.value,
+          kind: entry.relationKind,
+          source: entry.source,
+        });
+      }
+    }
+
     for (const entry of byTarget.gameReleaseDate) {
       const times = extractTimeValues(
         getPropertyStatements(claims, entry.propertyId),
@@ -456,6 +520,10 @@ function parseBatch(
           month: timeValue.month,
           day: timeValue.day,
           precision: timeValue.precision,
+          rank: timeValue.rank,
+          platformQid: timeValue.platformQid,
+          regionQid: timeValue.regionQid,
+          calendarModel: "wikidata:gregorian",
           human: buildReleaseDateHuman({
             year: timeValue.year,
             month: timeValue.month,
@@ -464,6 +532,10 @@ function parseBatch(
           }),
           source: entry.source,
           claimId: timeValue.claimId,
+          claimJson:
+            timeValue.claimJson === null
+              ? Prisma.JsonNull
+              : timeValue.claimJson,
         });
       }
     }
@@ -610,6 +682,10 @@ function parseBatch(
       gameCompanyRows,
       (row) => `${row.gameQid}:${row.companyQid}:${row.role}`,
     ),
+    gameRelationRows: dedupeRows(
+      gameRelationRows,
+      (row) => `${row.fromGameQid}:${row.toGameQid}:${row.kind}`,
+    ),
     releaseDateRows: dedupeRows(
       releaseDateRows,
       (row) => `${row.gameQid}:${row.claimId ?? row.human ?? ""}`,
@@ -637,10 +713,13 @@ function parseBatch(
 async function applyBatch(
   games: CandidateGame[],
   parsed: BatchRows,
-): Promise<void> {
+): Promise<{ skippedGameRelationRows: number }> {
   const qids = games.map((game) => game.qid);
   const allPlatformQids = [
     ...new Set(parsed.gamePlatformRows.map((row) => row.platformQid)),
+  ];
+  const allRelationTargetQids = [
+    ...new Set(parsed.gameRelationRows.map((row) => row.toGameQid)),
   ];
   const existingPlatforms = new Set(
     (
@@ -650,10 +729,23 @@ async function applyBatch(
       })
     ).map((row) => row.qid),
   );
+  const existingRelationTargets = new Set(
+    (
+      await prisma.game.findMany({
+        where: { qid: { in: allRelationTargetQids } },
+        select: { qid: true },
+      })
+    ).map((row) => row.qid),
+  );
 
   const filteredGamePlatformRows = parsed.gamePlatformRows.filter((row) =>
     existingPlatforms.has(row.platformQid),
   );
+  const filteredGameRelationRows = parsed.gameRelationRows.filter((row) =>
+    existingRelationTargets.has(row.toGameQid),
+  );
+  const skippedGameRelationRows =
+    parsed.gameRelationRows.length - filteredGameRelationRows.length;
 
   await prisma.$transaction(async (tx) => {
     if (parsed.tagsToCreate.size) {
@@ -673,6 +765,7 @@ async function applyBatch(
     await tx.gamePlatform.deleteMany({ where: { gameQid: { in: qids } } });
     await tx.gameTag.deleteMany({ where: { gameQid: { in: qids } } });
     await tx.gameCompany.deleteMany({ where: { gameQid: { in: qids } } });
+    await tx.gameRelation.deleteMany({ where: { fromGameQid: { in: qids } } });
     await tx.releaseDate.deleteMany({ where: { gameQid: { in: qids } } });
     await tx.website.deleteMany({ where: { gameQid: { in: qids } } });
     await tx.externalGame.deleteMany({ where: { gameQid: { in: qids } } });
@@ -697,6 +790,13 @@ async function applyBatch(
     if (parsed.gameCompanyRows.length) {
       await tx.gameCompany.createMany({
         data: parsed.gameCompanyRows,
+        skipDuplicates: true,
+      });
+    }
+
+    if (filteredGameRelationRows.length) {
+      await tx.gameRelation.createMany({
+        data: filteredGameRelationRows,
         skipDuplicates: true,
       });
     }
@@ -753,6 +853,8 @@ async function applyBatch(
       });
     }
   });
+
+  return { skippedGameRelationRows };
 }
 
 async function main() {
@@ -805,13 +907,13 @@ async function main() {
 
     try {
       const parsed = parseBatch(games, entries);
-      await applyBatch(games, parsed);
+      const batchResult = await applyBatch(games, parsed);
 
       processed += games.length;
       cursorQid = games[games.length - 1]?.qid ?? cursorQid;
 
       console.log(
-        `hydrateGamesFromClaims: batch=${batchIndex} processed=${processed} cursor=${cursorQid} scalarUpdates=${parsed.scalarUpdates.length} gameTags=${parsed.gameTagRows.length} companies=${parsed.gameCompanyRows.length}`,
+        `hydrateGamesFromClaims: batch=${batchIndex} processed=${processed} cursor=${cursorQid} scalarUpdates=${parsed.scalarUpdates.length} gameTags=${parsed.gameTagRows.length} companies=${parsed.gameCompanyRows.length} relationRowsSkipped=${batchResult.skippedGameRelationRows}`,
       );
     } catch (error) {
       errors += 1;
