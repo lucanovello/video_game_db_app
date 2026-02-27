@@ -73,13 +73,15 @@ Docs:
 
 - IGDB reference notes: `docs/igdb-api-notes.md`
 
-Run the full console-first pipeline:
+Canonical entrypoint (run this first):
 
 ```bash
 npm run wd:etl
 ```
 
-Or run step-by-step:
+This is the canonical ingestion path for platform + game roster + enrichment + claim hydration + platform/controller-family normalization + scoring + cleanup.
+
+Equivalent step-by-step sequence:
 
 ```bash
 npm run wd:platforms
@@ -89,8 +91,22 @@ npm run wd:platforms:major
 npm run wd:platforms:groupings
 npm run wd:games
 npm run wd:enrich
+npm run wd:etl:claims
+npm run wd:platform-relations
 npm run wd:scores
 npm run wd:coverage > platform-coverage.csv
+```
+
+Optional claim-normalization phase (property registry driven):
+
+```bash
+npm run wd:etl:claims
+```
+
+Platform hardware/family normalization phase:
+
+```bash
+npm run wd:platform-relations
 ```
 
 Useful variants:
@@ -106,6 +122,8 @@ npm run wd:cleanup       # flag obvious junk (missing labels/entities) for hidin
 ## Property Registry + Claim Hydration
 
 Catalog claims are stored in `Game.claimsJson`, and can be normalized into dedicated fields/tables with a controlled property registry.
+
+This phase is supplementary to `wd:etl` and is used to expand deterministic claim→field normalization and coverage analysis.
 
 New tables:
 
@@ -124,9 +142,10 @@ npm run wd:export-props-csv > property-usage.csv # export enriched property usag
 
 Workflow:
 
-1. Run `wd:analyze-props`
-2. Review/update `scripts/wikidata/propertyRegistry.ts`
-3. Run `wd:hydrate-prop-meta` and `wd:hydrate-games`
+1. Run `wd:etl` (canonical baseline ingest)
+2. Run `wd:analyze-props`
+3. Review/update `scripts/wikidata/propertyRegistry.ts`
+4. Run `wd:hydrate-prop-meta` and `wd:hydrate-games` (or `wd:etl:claims`)
 
 Useful flags:
 
@@ -148,3 +167,12 @@ npm run wd:cleanup
 - `Retry-After` is honored for 429/5xx responses.
 - `fetchGamesByPlatform` stores cursor state in `Platform.gamesCursorQid`, so reruns resume per platform.
 - PC/Windows-wide ingestion is intentionally out of scope for this MVP.
+
+## Browse routes
+
+- `/games`
+- `/platforms`
+- `/companies`
+- `/controllers`
+- `/tags`
+- `/activity`
