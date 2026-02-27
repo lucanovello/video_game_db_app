@@ -101,7 +101,10 @@ async function main() {
   const platformFilter = parsePlatformArg(process.argv.slice(2));
 
   const platforms = await prisma.platformRegistry.findMany({
-    where: platformFilter ? { platformQid: platformFilter } : undefined,
+    where: {
+      status: "ACTIVE",
+      ...(platformFilter ? { platformQid: platformFilter } : {}),
+    },
     select: {
       platformQid: true,
       nameLabel: true,

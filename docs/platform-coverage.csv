@@ -1,0 +1,129 @@
+platformQid,label,expectedCount,wdqsCount,wikiRosterCount,overlapCount,wdqsOnly,wikiOnly,deltaVsExpected,isMajor
+Q1406,Microsoft Windows,138163,0,0,0,0,0,-138163,true
+Q14116,macOS,25045,0,0,0,0,0,-25045,true
+Q388,Linux,18438,0,0,0,0,0,-18438,true
+Q19610114,Nintendo Switch,7036,0,0,0,0,0,-7036,true
+Q5014725,PlayStation 4,6107,0,0,0,0,0,-6107,true
+Q48493,iOS,5893,0,0,0,0,0,-5893,true
+Q94,Android,4558,0,0,0,0,0,-4558,true
+Q13361286,Xbox One,4026,3684,0,0,3684,0,-342,true
+Q98973368,Xbox Series X and Series S,3491,3263,0,0,3263,0,-228,false
+Q10680,PlayStation 2,3200,0,1502,0,0,1502,-3200,true
+Q63184502,PlayStation 5,2983,0,0,0,0,0,-2983,true
+Q99775,Commodore 64,2766,0,0,0,0,0,-2766,false
+Q170434,DOS,2405,0,0,0,0,0,-2405,false
+Q10683,PlayStation 3,2174,1996,0,0,1996,0,-178,true
+Q10677,PlayStation,2093,0,1201,0,0,1201,-2093,true
+Q48263,Xbox 360,1979,1797,4,0,1797,4,-182,true
+Q170323,Nintendo DS,1830,0,0,0,0,0,-1830,false
+Q100047,Commodore Amiga,1761,0,0,0,0,0,-1761,false
+Q192851,arcade video game machine,1737,0,0,0,0,0,-1737,false
+Q23882,ZX Spectrum,1654,0,0,0,0,0,-1654,false
+Q8079,Wii,1472,1441,0,0,1441,0,-31,true
+Q183259,Super Nintendo Entertainment System,1426,0,1437,0,0,1437,-1426,false
+Q478829,Amstrad CPC,1349,0,0,0,0,0,-1349,false
+Q13522376,Classic Mac OS,1315,0,0,0,0,0,-1315,false
+Q170325,PlayStation Portable,1284,0,0,0,0,0,-1284,true
+Q172742,Nintendo Entertainment System,1216,0,1367,0,0,1367,-1216,true
+Q627302,Atari ST,1075,0,0,0,0,0,-1075,false
+Q188642,Game Boy Advance,1054,0,0,0,0,0,-1054,false
+Q132020,Xbox,1052,1021,1248,849,172,399,-31,true
+Q10676,Sega Genesis,1034,0,0,0,0,0,-1034,false
+Q6368,web browser,1029,0,0,0,0,0,-1029,true
+Q188808,PlayStation Vita,969,0,0,0,0,0,-969,false
+Q56942,Wii U,867,856,0,0,856,0,-11,false
+Q64350339,iPadOS,812,0,0,0,0,0,-812,false
+Q203597,Nintendo 3DS,805,0,0,0,0,0,-805,false
+Q182172,Nintendo GameCube,693,0,870,0,0,870,-693,false
+Q853547,MSX,580,0,0,0,0,0,-580,false
+Q200912,Sega Saturn,542,0,0,0,0,0,-542,false
+Q186437,Game Boy,520,0,0,0,0,0,-520,false
+Q184198,Dreamcast,499,0,0,0,0,0,-499,false
+Q203992,Game Boy Color,453,0,0,0,0,0,-453,false
+Q184839,Nintendo 64,423,0,534,0,0,534,-423,false
+Q206261,Atari 2600,368,0,0,0,0,0,-368,false
+Q249075,Atari 8-bit family,333,0,0,0,0,0,-333,false
+Q1057377,TurboGrafx-16,329,0,0,0,0,0,-329,false
+Q16338,personal computer,324,0,0,0,0,0,-324,true
+Q47604,MS-DOS,290,0,0,0,0,0,-290,true
+Q122761124,Nintendo Switch 2,276,0,0,0,0,0,-276,false
+Q209868,Sega Master System,263,0,0,0,0,0,-263,false
+Q20965967,tvOS,239,0,0,0,0,0,-239,false
+Q3017175,Apple II,231,0,0,0,0,0,-231,false
+Q201652,Apple II series,227,0,0,0,0,0,-227,false
+Q183505,NEC PC-9800 series,213,0,0,0,0,0,-213,false
+Q135321,Famicom Disk System,190,0,0,0,0,0,-190,false
+Q43627,Mac OS operating systems,190,0,0,0,0,0,-190,false
+Q751719,Game Gear,178,0,0,0,0,0,-178,false
+Q1047516,Sega CD,169,168,0,0,168,0,-1,false
+Q4885200,Windows Phone,164,0,0,0,0,0,-164,true
+Q229429,3DO,159,158,0,0,158,0,-1,false
+Q75687,Mac,136,0,0,0,0,0,-136,true
+Q1046862,ColecoVision,130,130,0,0,130,0,0,false
+Q1282269,Apple IIGS,128,0,0,0,0,0,-128,false
+Q1338888,NEC PC-8800 series,127,0,0,0,0,0,-127,false
+Q1054350,Neo Geo,123,0,0,0,0,0,-123,false
+Q17517,mobile phone,121,0,0,0,0,0,-121,true
+Q749976,BBC Micro,121,0,0,0,0,0,-121,false
+Q610305,TRS-80 Model I,117,0,0,0,0,0,-117,false
+Q63993524,Playdate,110,0,0,0,0,0,-110,false
+Q1023103,Philips CD-i,100,0,0,0,0,0,-100,false
+Q165658,Adobe Flash,100,0,0,0,0,0,-100,false
+Q193828,"Java Platform, Micro Edition",100,0,0,0,0,0,-100,false
+Q1061441,Intellivision,99,0,0,0,0,0,-99,false
+Q531896,FM Towns,93,0,0,0,0,0,-93,false
+Q918232,Commodore VIC-20,93,0,0,0,0,0,-93,false
+Q1758277,Sharp X68000,83,0,0,0,0,0,-83,false
+Q637178,Nintendo DSi,82,0,0,0,0,0,-82,false
+Q41357,Acorn Archimedes,79,0,0,0,0,0,-79,false
+Q695161,Amiga CD32,78,78,0,0,78,0,0,false
+Q193321,Java virtual machine,76,0,0,0,0,0,-76,false
+Q342163,Acorn Electron,74,0,0,0,0,0,-74,false
+Q471094,Amiga 1200,72,0,0,0,0,0,-72,false
+Q743222,Atari 5200,68,68,0,0,68,0,0,false
+Q2710884,Sharp X1,66,0,0,0,0,0,-66,false
+Q336434,N-Gage,66,0,0,0,0,0,-66,false
+Q174666,cross-platform,64,0,0,0,0,0,-64,false
+Q751046,IBM PC compatible,64,0,0,0,0,0,-64,false
+Q202712,IBM Personal Computer,61,0,0,0,0,0,-61,false
+Q650601,Atari Jaguar,58,53,0,0,53,0,-5,false
+Q1065792,WonderSwan,56,0,0,0,0,0,-56,false
+Q2379925,FM-7,56,0,0,0,0,0,-56,false
+Q753657,Atari Lynx,52,51,0,0,51,0,-1,false
+Q1391641,Ouya,51,0,0,0,0,0,-51,false
+Q1238768,Dragon 32/64,49,0,0,0,0,0,-49,false
+Q2703883,Neo Geo CD,49,0,0,0,0,0,-49,false
+Q753600,Atari 7800,48,0,0,0,0,0,-48,false
+Q1115913,Commodore 16,45,0,0,0,0,0,-45,false
+Q478833,Amstrad PCW,45,0,0,0,0,0,-45,false
+Q1136956,SG-1000,43,0,0,0,0,0,-43,false
+Q215034,Game & Watch series,40,0,0,0,0,0,-40,false
+Q454390,Texas Instruments TI-99/4A,40,0,0,0,0,0,-40,false
+Q2396081,Thomson MO5,38,0,0,0,0,0,-38,false
+Q124650763,Meta Horizon OS,35,0,0,0,0,0,-35,false
+Q355,Facebook,34,0,0,0,0,0,-34,true
+Q1048035,WonderSwan Color,33,0,0,0,0,0,-33,false
+Q1977455,Neo Geo Pocket Color,33,1,0,0,1,0,-32,false
+Q1063978,Sega 32X,32,40,0,0,40,0,8,false
+Q1411846,TRS-80 Color Computer,31,0,0,0,0,0,-31,false
+Q55315688,Thomson TO,31,0,0,0,0,0,-31,false
+Q868568,Commodore Plus/4,30,0,0,0,0,0,-30,false
+Q2053,HTML5,28,0,0,0,0,0,-28,false
+Q848991,browser game,28,0,0,0,0,0,-28,false
+Q177234,mainframe computer,27,0,0,0,0,0,-27,false
+Q11232203,MSX 2,26,0,0,0,0,0,-26,false
+Q1136902,PC-FX,26,26,0,0,26,0,0,false
+Q130378643,Meta Quest,26,0,0,0,0,0,-26,false
+Q17679679,New Nintendo 3DS,26,0,0,0,0,0,-26,false
+Q879989,BlackBerry 10,26,0,0,0,0,0,-26,false
+Q164651,Virtual Boy,25,0,0,0,0,0,-25,false
+Q3338058,Neo-Geo MVS,25,0,0,0,0,0,-25,false
+Q576932,Magnavox Odyssey 2,25,25,0,0,25,0,0,false
+Q1037185,HP 95LX,23,0,0,0,0,0,-23,false
+Q1115919,Commodore 128,22,0,0,0,0,0,-22,false
+Q380526,AmigaOS,21,0,0,0,0,0,-21,false
+Q946661,Commodore PET,21,0,0,0,0,0,-21,false
+Q955368,CDTV,21,21,0,0,21,0,0,false
+Q119105052,visionOS,20,0,0,0,0,0,-20,false
+Q184372,Zeebo,20,0,0,0,0,0,-20,false
+Q483318,Symbian,20,0,0,0,0,0,-20,true
