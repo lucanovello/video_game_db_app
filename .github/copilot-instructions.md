@@ -1,173 +1,86 @@
-# Copilot Instructions — Video Game DB (Wikidata/Wikipedia ingestion)
+# Copilot Instructions — video-game-db-app
 
-## Project goal
+## Project summary
 
-Build a “Letterboxd for video games” database + web app. The core technical objective is a **repeatable, idempotent ingestion pipeline** that:
+This repo is a **Next.js (App Router) + TypeScript + Prisma + Postgres** app for a **Letterboxd-like social video game database**.
+It has two pillars:
 
-1. discovers rosters (games per platform),
-2. caches raw upstream responses,
-3. parses into a normalized Postgres schema,
-4. generates coverage/QA reports.
+1. **Catalog/ETL**: ingest + normalize video game metadata from **Wikidata** (WDQS + entity hydration)
+2. **Social**: users can log, review, and list games
 
-This repo uses **Next.js + TypeScript + Prisma + Postgres** and a set of Node scripts under `scripts/` for ingestion.
+## Non-negotiable data principles
 
----
+- **Never invent data.** If Wikidata doesn’t provide a field, store `null` and rely on **coverage reporting**.
+- **QIDs are primary keys** for catalog entities (games/platforms/companies/tags/etc). Prefer relations + join tables over strings.
+- **Keep provenance**: when adding/deriving data, store `source` and (when available) `claimId`/`claimJson`.
 
-## Guiding principles (non-negotiable)
+## Canonical ingestion architecture
 
-- **Idempotent scripts:** running the same script twice should not duplicate rows or corrupt data.
-- **Cache first:** never refetch upstream data if you already have the same version cached.
-- **Two-layer data model:**
-  - **Raw cache layer**: store fetched page/entity payloads (JSON/text) + version markers.
-  - **Parsed layer**: store normalized entities used by the app (Game, Platform, etc.).
-- **Provenance-aware:** every parsed record should be traceable back to a cache entry (page/entity) that produced it.
-- **Small, testable steps:** implement ingestion in discrete scripts with clear inputs/outputs.
-- **Fail gracefully:** partial progress is acceptable; scripts should resume/retry rather than restart from scratch.
+- **One source of truth for claim→field mapping:** `scripts/wikidata/propertyRegistry.ts`.
+  - If you add a new field/table derived from claims, you must update:
+    - `propertyRegistry.ts` (mapping + parser)
+    - `wd:hydrate-games` logic (if needed)
+    - coverage/reports if relevant
+- **Always use the entity cache** (revision-aware) for Wikidata entity hydration to avoid refetching and rate-limit issues.
+- **Release dates must respect Wikidata ranks + qualifiers** (platform/region/precision). Normalize into `ReleaseDate` rows and derive `Game.firstReleaseAt` + `Game.releaseYear` deterministically.
+- Keep ETL **idempotent**:
+  - Safe to rerun; prefer `upsert`/`connectOrCreate`
+  - Store cursors/checkpoints in DB (e.g., platform cursor fields)
+  - Avoid destructive truncation unless explicitly requested by a script flag
 
----
+## External references (use as guidance, not as truth)
 
-## Repo conventions
+- Wikidata WikiProject Video games pages guide roster/coverage expectations.
+- IGDB endpoints are a **schema inspiration checklist** (entity types + relationships). Do **not** copy IGDB business-logic fields (IGDB ratings/hypes/etc). Prefer neutral, provider-based score tables.
 
-### TypeScript / Node
+## Schema/DB rules
 
-- Prefer TypeScript for scripts (`scripts/**/*.ts`).
-- Avoid large framework dependencies in ingestion scripts; keep them lean.
-- Use a single, reusable HTTP client helper for upstream calls.
+- Prefer **normalized tables** for: Platforms, Companies, Tags (genres/themes/engines/modes/etc), ReleaseDates, Websites, External IDs, Media.
+- Do not duplicate “ratings” on `Game` if they already exist in `GameScore`. Keep scoring in provider-scoped tables.
+- Index for real queries:
+  - `Game(releaseYear)`, `Game(firstReleaseAt)`, `Game(updatedAt)`
+  - join tables on both FKs
+  - `Tag(kind,label)` and `Company(name)`
+- Avoid breaking migrations. If schema changes are big, ship in small steps:
+  1. additive tables/fields
+  2. backfill script
+  3. switch reads
+  4. remove old fields
 
-### Prisma / Postgres
+## Frontend rules (Letterboxd-for-games UX)
 
-- Use Prisma migrations for schema changes.
-- Prefer `Json`/JSONB for raw payload storage in cache tables.
-- Add **unique constraints** and **indexes** to enforce idempotency and performance.
+- App Router. Prefer **Server Components** and server-side Prisma queries; client components only when interactive.
+- No Prisma usage in client components.
+- Pages must be relationship-first and linkable:
+  - Games → Platforms / Companies / Tags / ReleaseDates / Media / Websites / External IDs
+  - Platforms → Games on platform + platform metadata
+  - Companies → Developed/Published/etc games
+  - Tags → Games by tag kind
+  - Users → Logs / Reviews / Lists
+- Prefer **cursor pagination** for large lists (avoid deep offset pagination).
+- Keep UI consistent and simple; prioritize browse + search + filters.
 
-### Logging
+## Coding conventions
 
-- Scripts must log:
-  - counts (fetched, cached hit, parsed, upserted)
-  - timings (start/end)
-  - any “skipped because unchanged” behavior
-- Errors should include enough context to debug (platform id, page title, QID).
+- TypeScript: keep types explicit at boundaries (API/ETL parsing); validate unknown JSON before use.
+- ETL: handle network errors robustly; honor `Retry-After`; use bounded concurrency.
+- Keep changes small and reviewable; avoid sweeping refactors unless asked.
 
----
+## Commands (canonical)
 
-## Data ingestion architecture (how to think about it)
+- Setup:
+  - `npm install`
+  - `npm run prisma:generate`
+  - `npm run db:migrate`
+- Dev: `npm run dev`
+- Full ingest pipeline: `npm run wd:etl`
+- Property coverage + hydration workflow:
+  - `npm run wd:analyze-props`
+  - update `scripts/wikidata/propertyRegistry.ts`
+  - `npm run wd:hydrate-prop-meta`
+  - `npm run wd:hydrate-games`
 
-### 1) Raw cache layer (source documents)
+## Agent workflow (when making repo changes)
 
-Cache upstream responses so we can re-parse without re-downloading and can debug issues later.
-
-**Cache rules**
-
-- “Version marker” determines if a fetch is needed:
-  - Wiki pages: store revision id (a version number).
-  - Wikidata entities: store last revision id (a version number).
-- If version marker unchanged → **skip network** and use cached payload.
-
-### 2) Parsed layer (normalized domain tables)
-
-Parsers read from cache tables and write to app tables. Parsers must be deterministic and re-runnable.
-
----
-
-## Upstream calls (keep it simple)
-
-We interact with:
-
-- Wikipedia API endpoint (`en.wikipedia.org/...`) for list pages + game pages.
-- Wikidata API endpoint (`wikidata.org/...`) for curated project pages and entity hydration.
-
-**Implementation approach**
-
-- Create a single module like `scripts/wiki/wikiClient.ts`:
-  - build request URLs with query params
-  - `fetch()` JSON/text
-  - retry with backoff on transient failures
-  - concurrency limiting (simple queue)
-- All scripts should reuse this client; do not duplicate request logic.
-
----
-
-## Script design standards
-
-### Script contract
-
-Every script should clearly define:
-
-- **Inputs** (DB tables, env vars, optional CLI args)
-- **Outputs** (DB tables updated, files written, logs printed)
-- **Idempotency behavior** (unique keys, upserts, skip rules)
-
-### Script naming
-
-Use verbs:
-
-- `fetch*` = downloads + caches only
-- `parse*` = reads cached data, extracts items, writes parsed tables
-- `ingest*` = does multiple stages end-to-end
-- `report*` = outputs coverage/QA metrics
-
-### Recommended structure
-
-- `scripts/wiki/` — Wikipedia/Wikidata page fetch + parsing helpers
-- `scripts/wikidata/` — entity hydration + entity parsing
-- `scripts/reports/` — coverage reports and QA utilities
-- `scripts/lib/` — shared utilities (db, logging, concurrency, CLI args)
-
----
-
-## DB patterns Copilot should follow
-
-### Use database constraints to enforce correctness
-
-- Prefer `@@unique([...])` constraints for membership tables.
-- Prefer `upsert` / `createMany({ skipDuplicates: true })` patterns.
-- Add indexes on:
-  - foreign keys
-  - frequently filtered columns (platformQid, gameQid, title)
-  - version markers (revid/lastrevid) if used in queries
-
-### Prefer “latest snapshot” caching unless explicitly asked for history
-
-Default is: one cache row per (site, title) or per QID, updated when version changes.
-Only store full revision history if a specific need is identified.
-
----
-
-## Coverage / QA reporting (must-have)
-
-Provide scripts that output:
-
-- total games per platform
-- % with release date
-- % with genre
-- % with developer/publisher
-- sample lists of missing-field games to guide improvements
-
-Reports should be fast and not require network.
-
----
-
-## Safety / hygiene
-
-- Never hardcode secrets. Read from `.env` / environment variables.
-- Avoid aggressive concurrency. Be polite to upstream services.
-- Don’t introduce heavy parsing dependencies unless clearly justified.
-
----
-
-## How Copilot should work on tasks
-
-1. **Start by summarizing the plan** for the change (files to edit, new scripts/models).
-2. Make schema changes first (Prisma), then implement scripts, then add a minimal report/test.
-3. Keep PR-sized diffs: no massive refactors unless requested.
-4. If uncertain about an existing convention, search the codebase and match it.
-
----
-
-## Definition of done for any ingestion feature
-
-- Schema + migration is added (if needed).
-- Script is idempotent and logs meaningful counts.
-- Cache skip logic is implemented (no refetch when unchanged).
-- A report or quick query verifies output quality.
-- Re-running scripts produces the same final DB state.
+- For large tasks: **plan first** (files touched, migration/backfill, acceptance criteria).
+- Implement one todo at a time, run relevant scripts/checks, and leave clear notes in the PR/commit message.
